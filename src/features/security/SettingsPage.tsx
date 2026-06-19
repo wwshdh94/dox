@@ -1,0 +1,118 @@
+import { Link } from 'react-router-dom';
+import { Header } from '@/components/Header';
+import { RadioGroup, Select } from '@/components/Input';
+import { useVaultStore } from '@/store/useVaultStore';
+import { canUseCloudAi, canUseEmailReminders } from '@/lib/planLimits';
+import { UpgradeHint } from '@/components/UpgradeHint';
+import type { ThemeMode } from '@/types';
+
+type ReminderMode = 'both' | 'push' | 'email' | 'off';
+type ExtractionMode = 'privacy' | 'cloud';
+
+function reminderMode(settings: { pushReminders: boolean; emailReminders: boolean }): ReminderMode {
+  if (settings.pushReminders && settings.emailReminders) return 'both';
+  if (settings.pushReminders) return 'push';
+  if (settings.emailReminders) return 'email';
+  return 'off';
+}
+
+export function SettingsPage() {
+  const settings = useVaultStore((s) => s.settings);
+  const user = useVaultStore((s) => s.user);
+  const setSettings = useVaultStore((s) => s.setSettings);
+  const emailAllowed = canUseEmailReminders(user);
+  const cloudAllowed = canUseCloudAi(user);
+
+  const applyReminders = (mode: ReminderMode) => {
+    if (!emailAllowed && (mode === 'both' || mode === 'email')) {
+      setSettings({ pushReminders: mode === 'both', emailReminders: false });
+      return;
+    }
+    setSettings({
+      pushReminders: mode === 'both' || mode === 'push',
+      emailReminders: mode === 'both' || mode === 'email',
+    });
+  };
+
+  const applyExtraction = (mode: ExtractionMode) => {
+    if (!cloudAllowed && mode === 'cloud') return;
+    setSettings({
+      privacyMode: mode === 'privacy',
+      cloudAiEnabled: mode === 'cloud',
+    });
+  };
+
+  return (
+    <div className="min-h-full pb-8">
+      <Header title="Settings" backTo="/profile" />
+      <main className="page-main animate-fade-up space-y-6">
+        <section className="space-y-3">
+          <p className="section-label">Appearance</p>
+          <Select
+            label="Theme"
+            value={settings.theme}
+            onChange={(e) => setSettings({ theme: e.target.value as ThemeMode })}
+          >
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </Select>
+        </section>
+
+        <section className="surface-panel p-4">
+          <RadioGroup
+            label="Reminders"
+            name="reminders"
+            value={reminderMode(settings)}
+            onChange={applyReminders}
+            options={[
+              { value: 'both', label: 'Push and email', disabled: !emailAllowed },
+              { value: 'push', label: 'Push only' },
+              { value: 'email', label: 'Email only', disabled: !emailAllowed },
+              { value: 'off', label: 'Off' },
+            ]}
+          />
+          {!emailAllowed && (
+            <p className="mt-2 text-xs text-muted">
+              Email reminders are a Pro feature.{' '}
+              <Link to="/profile/plan" className="text-accent-ink">
+                Compare plans
+              </Link>
+            </p>
+          )}
+        </section>
+
+        <section className="surface-panel p-4">
+          <RadioGroup
+            label="Extraction"
+            name="extraction"
+            value={settings.privacyMode ? 'privacy' : 'cloud'}
+            onChange={applyExtraction}
+            options={[
+              {
+                value: 'privacy',
+                label: 'Privacy mode',
+                hint: 'On-device OCR only — no cloud AI',
+              },
+              {
+                value: 'cloud',
+                label: 'Allow cloud AI',
+                hint: 'Pro — higher accuracy on Indian doc layouts',
+                disabled: !cloudAllowed,
+              },
+            ]}
+          />
+          {!cloudAllowed && <UpgradeHint message="Cloud AI extraction is included with Pro." />}
+        </section>
+
+        {settings.recoveryCode && (
+          <section className="surface-panel p-4 text-sm">
+            <p className="font-medium">Recovery code</p>
+            <p className="mt-1 font-mono text-muted">{settings.recoveryCode}</p>
+          </section>
+        )}
+
+      </main>
+    </div>
+  );
+}
