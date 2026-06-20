@@ -15,9 +15,10 @@ export function MemberDetailPage() {
     return (
       <div className="min-h-full pb-28">
         <Header title="Member" backFallback="/" />
-        <main className="page-main">
+        <main className="page-main animate-fade-up">
           <p className="text-sm text-muted">Member not found</p>
         </main>
+        <BottomNav />
       </div>
     );
   }

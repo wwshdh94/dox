@@ -44,7 +44,7 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-full pb-8">
-      <Header title="Settings" backTo="/profile" />
+      <Header title="Settings" backFallback="/profile" />
       <main className="page-main animate-fade-up space-y-6">
         <section className="space-y-3">
           <p className="section-label">Appearance</p>

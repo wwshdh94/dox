@@ -12,9 +12,9 @@ export function SecurityPage() {
 
   return (
     <div className="min-h-full pb-8">
-      <Header title="Security Center" backTo="/profile" />
-      <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
-        <div className="space-y-2 rounded-2xl border border-border bg-surface p-4 text-sm">
+      <Header title="Security Center" backFallback="/profile" />
+      <main className="page-main animate-fade-up space-y-4">
+        <div className="surface-panel space-y-2 p-4 text-sm">
           <StatusRow label="Vault" value="Encrypted — AES-256-GCM" ok />
           <StatusRow label="In transit" value="TLS 1.3" ok />
           <StatusRow label="Data location" value="India (demo — local device)" ok />
@@ -37,7 +37,7 @@ export function SecurityPage() {
         </div>
 
         <section>
-          <p className="mb-2 text-sm font-medium text-muted">Recent activity</p>
+          <p className="section-label mb-2">Recent activity</p>
           <ul className="max-h-48 space-y-1 overflow-y-auto text-xs text-muted">
             {activities.slice(0, 20).map((a) => (
               <li key={a.id}>{a.event} · {new Date(a.createdAt).toLocaleString()}</li>

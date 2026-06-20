@@ -65,9 +65,10 @@ export function DocumentDetailPage() {
     return (
       <div className="min-h-full pb-28">
         <Header title="Document" backFallback="/" />
-        <main className="page-main">
+        <main className="page-main animate-fade-up">
           <p className="text-sm text-muted">Document not found</p>
         </main>
+        <BottomNav />
       </div>
     );
   }

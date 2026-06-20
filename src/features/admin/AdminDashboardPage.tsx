@@ -93,7 +93,7 @@ export function AdminDashboardPage() {
   };
 
   return (
-    <div className="min-h-full pb-12">
+    <div className="min-h-full pb-8">
       <Header title="Admin" backFallback="/" />
       <main className="page-main animate-fade-up space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">

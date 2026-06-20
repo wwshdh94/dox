@@ -67,9 +67,10 @@ export function BundleDetailPage() {
     return (
       <div className="min-h-full pb-28">
         <Header title="Bundle" backFallback="/bundles" />
-        <main className="page-main">
+        <main className="page-main animate-fade-up">
           <p className="text-sm text-muted">Bundle not found.</p>
         </main>
+        <BottomNav />
       </div>
     );
   }

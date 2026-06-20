@@ -12,7 +12,7 @@ export function LockPage() {
 
   return (
     <div className="min-h-full pb-8">
-      <Header title="Unlock" backTo="/profile/security" />
+      <Header title="Unlock" backFallback="/profile/security" />
       <div className="flex flex-col items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm space-y-6 text-center">
           <div className="text-4xl">🔒</div>

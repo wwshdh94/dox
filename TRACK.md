@@ -1,6 +1,6 @@
 # Dox — Development Track
 
-**Last updated:** 2026-06-19
+**Last updated:** 2026-06-20
 
 ## Current status
 
@@ -34,7 +34,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] Back navigation on all sub-pages via Header ← button + smart route fallbacks
 - [x] **Document tags** — domain (family/health/assets) + category; tab-scoped filtering
 - [x] **Family tab Me | Family toggle** — Me shows owner vault inline; Family shows other members
-- [x] **Dox logo** — document + expiry clock mark (`Logo` component, `public/logo.svg`, favicon)
+- [x] **Dox logo** — nameless geometric abstract mark (`Logo` component, `public/logo.svg`, favicon)
 - [x] **Shared bundles** — FAB entry, save bundles, temp share links (`/p/:token`), activity log, print view with anti-crop watermark
 - [x] **Backup & restore** — encrypted `.doxbackup` file + Google Drive upload/restore (`/profile/backup`)
 - [x] **Member profiles** — phone, email, photo; invite to app (WhatsApp / email / copy link)
@@ -43,6 +43,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Verification queue** — `src/lib/verificationQueue.ts`: pending docs staged on upload; free max 5 / Pro max 10 unverified; blocks new uploads until verified; UI shows "unlimited" for Pro verified storage
 - [x] **Production doc cap** — `src/lib/documentLimits.ts`: hard 50 docs/member (all plans); `src/lib/adminNotify.ts` webhooks on cap; enforced in store + backup restore scan
 - [x] **Admin dashboard** — passcode + owner email gate at `/admin`; **platform-wide** stats across all households (registry + events), not single-user vault
+- [x] **UI uniformity** — consistent `page-main` / `surface-panel` / `backFallback` / `pb-28`+BottomNav patterns across pages; redundant footer back links removed
 
 ## In progress
 
@@ -75,7 +76,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 ## Test results
 
 ```
-npm test  — 46/46 pass
+npm test  — 51/51 pass
 npm run build — success (PWA SW generated)
 ```
 

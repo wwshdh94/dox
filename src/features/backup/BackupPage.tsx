@@ -163,7 +163,7 @@ export function BackupPage() {
 
   return (
     <div className="min-h-full pb-8">
-      <Header title="Backup & restore" backTo="/profile" />
+      <Header title="Backup & restore" backFallback="/profile" />
       <main className="page-main animate-fade-up space-y-5">
         <p className="text-sm text-muted">
           Create an encrypted backup of your vault — documents, family, bundles, and settings. If you

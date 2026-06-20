@@ -24,9 +24,10 @@ export function AssetDetailPage() {
     return (
       <div className="min-h-full pb-28">
         <Header title="Asset" backFallback="/assets" />
-        <main className="page-main">
+        <main className="page-main animate-fade-up">
           <p className="text-sm text-muted">Asset not found</p>
         </main>
+        <BottomNav />
       </div>
     );
   }
@@ -37,9 +38,9 @@ export function AssetDetailPage() {
   return (
     <div className="min-h-full pb-28">
       <Header title={asset.label} backFallback="/assets" />
-      <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
+      <main className="page-main animate-fade-up space-y-4">
         {pf && (
-          <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 text-sm">
+          <section className="surface-panel space-y-3 p-4 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">Amount</span>
               <span className="font-medium">{formatINR(pf.amount)}</span>

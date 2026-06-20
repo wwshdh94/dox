@@ -203,9 +203,9 @@ export function ExpiringPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-full pb-8">
+    <div className="min-h-full pb-28">
       <Header title="Expiring soon" backFallback="/" />
-      <main className="mx-auto max-w-lg space-y-3 px-4 py-4">
+      <main className="page-main animate-fade-up space-y-3">
         {expiring.length === 0 && <p className="text-sm text-muted">Nothing expiring in 30 days.</p>}
         {expiring.map((d) => {
           const member = members.find((m) => m.id === d.memberId);
@@ -223,6 +223,7 @@ export function ExpiringPage() {
           );
         })}
       </main>
+      <BottomNav />
     </div>
   );
 }

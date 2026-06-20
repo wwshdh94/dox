@@ -39,8 +39,8 @@ export function VisitingCardPage() {
 
   return (
     <div className="min-h-full pb-8">
-      <Header title="Visiting Card" backTo="/profile" />
-      <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
+      <Header title="Visiting Card" backFallback="/profile" />
+      <main className="page-main animate-fade-up space-y-4">
         {!canPublish && (
           <UpgradeHint message="Digital visiting cards with QR and vCard export are a Pro feature." />
         )}
@@ -77,7 +77,7 @@ export function VisitingCardPage() {
               Show nearby (QR)
             </Button>
             {showQr && (
-              <div className="rounded-2xl border border-border bg-surface p-6 text-center">
+              <div className="surface-panel p-6 text-center">
                 <p className="mb-2 text-xs text-muted">Scan to open card</p>
                 <p className="break-all text-sm text-accent-ink">{publicUrl}</p>
               </div>
@@ -109,7 +109,7 @@ export function PublicCardPage({ slug }: { slug: string }) {
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-6">
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="surface-panel-elevated p-6">
         <p className="text-xl font-semibold">{fields.name}</p>
         <p className="text-accent-ink">{fields.title}</p>
         <p className="text-sm text-muted">{fields.organization}</p>
