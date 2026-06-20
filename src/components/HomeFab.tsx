@@ -240,7 +240,7 @@ export function HomeFab({ context, memberId }: { context: HomeContext; memberId?
             aria-label={open ? 'Close add menu' : 'Add document'}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg ring-4 ring-accent-soft/50 transition-all duration-200 active:scale-95 ${open ? 'bg-text text-white hover:bg-text/90' : 'border border-accent-muted bg-accent text-accent-fg hover:bg-accent-hover'}`}
+            className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg ring-4 ring-accent-soft/50 transition-all duration-200 active:scale-95 ${open ? 'bg-text text-bg hover:opacity-90' : 'border border-accent-muted bg-accent text-accent-fg hover:bg-accent-hover'}`}
           >
             {open ? <FabCloseIcon /> : <FabAddIcon />}
           </button>
