@@ -1,6 +1,7 @@
 import type { Asset, Document, FamilyMember, User } from '@/types';
 import { getOwnerMember } from '@/lib/family';
 import { canUploadDocument } from '@/lib/referrals';
+import { isDocumentReviewed } from '@/lib/documentReview';
 import { canStageDocument, countVerifiedDocuments } from '@/lib/verificationQueue';
 
 /** Hard production cap per family member — all plans, incl. Pro. Not shown in marketing UI. */
@@ -61,7 +62,7 @@ export function checkCanAddDocument(
   documents: Document[],
   assets: Asset[],
   members: FamilyMember[],
-  target: DocRef & { verificationStatus: 'pending' | 'verified' },
+  target: DocRef & { reviewStatus?: Document['reviewStatus']; verificationStatus?: Document['verificationStatus'] },
 ): DocumentLimitCheck {
   const memberId = resolveDocumentMemberId(target, assets, members);
   if (!memberId) {
@@ -73,7 +74,7 @@ export function checkCanAddDocument(
     return { allowed: false, reason: 'member_cap', memberId, memberCount };
   }
 
-  if (target.verificationStatus === 'pending') {
+  if (target.reviewStatus === 'processing' || target.reviewStatus === 'under_review' || target.verificationStatus === 'pending') {
     if (!canStageDocument(user, documents)) {
       return { allowed: false, reason: 'pending_queue' };
     }
@@ -92,17 +93,13 @@ export function checkCanVerifyDocument(
   documents: Document[],
   doc: Document,
 ): DocumentLimitCheck {
-  if (isDocumentVerified(doc)) {
+  if (isDocumentReviewed(doc)) {
     return { allowed: false, reason: 'plan' };
   }
   if (!canUploadDocument(user, countVerifiedDocuments(documents))) {
     return { allowed: false, reason: 'plan' };
   }
   return { allowed: true };
-}
-
-function isDocumentVerified(doc: Pick<Document, 'verificationStatus'>): boolean {
-  return doc.verificationStatus !== 'pending';
 }
 
 export function memberCapReachedAfterAdd(memberCount: number): boolean {

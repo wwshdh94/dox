@@ -27,6 +27,20 @@ export const DOC_FIELD_SCHEMAS: Record<DocType, DocFieldDef[]> = {
     { key: 'dateOfBirth', label: 'Date of birth', type: 'date' },
     { key: 'fathersName', label: "Father's name" },
   ],
+  driving_license: [
+    { key: 'fullName', label: 'Full name' },
+    { key: 'licenseNumber', label: 'License number' },
+    { key: 'dateOfBirth', label: 'Date of birth', type: 'date' },
+    { key: 'expiryDate', label: 'Valid until', type: 'date' },
+  ],
+  voter_id: [
+    { key: 'fullName', label: 'Full name' },
+    { key: 'voterIdNumber', label: 'EPIC / Voter ID number' },
+  ],
+  ration_card: [
+    { key: 'fullName', label: 'Head of family' },
+    { key: 'rationCardNumber', label: 'Ration card number' },
+  ],
   vehicle_rc: [
     { key: 'registrationNumber', label: 'Registration number' },
     { key: 'ownerName', label: 'Owner name' },
@@ -109,6 +123,9 @@ const PRIMARY_REVEAL_FIELD: Partial<Record<DocType, string>> = {
   passport: 'passportNumber',
   pan: 'panNumber',
   aadhaar: 'aadhaarNumber',
+  driving_license: 'licenseNumber',
+  voter_id: 'voterIdNumber',
+  ration_card: 'rationCardNumber',
   vehicle_rc: 'registrationNumber',
   vehicle_puc: 'registrationNumber',
   vehicle_insurance: 'policyNumber',
@@ -148,6 +165,7 @@ export function normalizeDocFields(
 export function usesFieldBasedExpiry(docType: DocType): boolean {
   return (
     docType === 'passport' ||
+    docType === 'driving_license' ||
     docType === 'vehicle_puc' ||
     INSURANCE_TYPES.includes(docType) ||
     docType === 'purchase_receipt'
@@ -170,6 +188,7 @@ export function documentExpiryFromFields(
 
   switch (docType) {
     case 'passport':
+    case 'driving_license':
       return pick('expiryDate') ?? fallback;
     case 'vehicle_puc':
       return pick('validTill') ?? fallback;

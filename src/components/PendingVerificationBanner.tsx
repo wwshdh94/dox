@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
-import { getUnverifiedDocuments } from '@/lib/verificationQueue';
+import { getDocumentsNeedingReview } from '@/lib/documentReview';
 import { useVaultStore } from '@/store/useVaultStore';
 
 export function PendingVerificationBanner() {
   const documents = useVaultStore((s) => s.documents);
-  const pending = getUnverifiedDocuments(documents);
+  const pending = getDocumentsNeedingReview(documents);
 
   if (pending.length === 0) return null;
 
@@ -13,16 +13,16 @@ export function PendingVerificationBanner() {
   return (
     <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
       <p className="font-medium text-text">
-        {pending.length} document{pending.length === 1 ? '' : 's'} waiting for verification
+        {pending.length} document{pending.length === 1 ? '' : 's'} under review
       </p>
       <p className="mt-1 text-xs text-muted">
-        Confirm extracted details before adding more uploads.
+        Open a document and mark it reviewed after checking extracted details.
       </p>
       <Link
-        to={`/upload?verify=${first.id}`}
+        to={`/documents/${first.id}`}
         className="mt-2 inline-block text-xs font-medium text-accent-ink"
       >
-        Verify now →
+        Review now →
       </Link>
     </div>
   );

@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { Input, Select, Textarea } from '@/components/Input';
 import { useVaultStore } from '@/store/useVaultStore';
 import { memberSelectLabel } from '@/lib/family';
+import { uploadPathWithCamera, type UploadNavigationState } from '@/lib/uploadNavigation';
 
 type HomeContext = 'family' | 'assets' | 'health';
 type FabTier = 'wide' | 'mediumWide' | 'medium' | 'narrow';
@@ -103,7 +104,7 @@ function QuickNoteModal({
       memberId: context === 'family' ? memberId || undefined : undefined,
       fields: {},
       notes: note.trim(),
-      verificationStatus: 'verified',
+      reviewStatus: 'reviewed',
     });
     if (!id) {
       setSaveError('Could not save note — check plan or member document limits.');
@@ -148,6 +149,8 @@ export function HomeFab({ context, memberId }: { context: HomeContext; memberId?
   const [open, setOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   const close = () => setOpen(false);
@@ -180,8 +183,35 @@ export function HomeFab({ context, memberId }: { context: HomeContext; memberId?
           : '/upload';
   const uploadPath = uploadBase;
 
+  const goToUploadWithFile = (picked: File, camera: boolean) => {
+    const path = camera ? uploadPathWithCamera(uploadPath) : uploadPath;
+    navigate(path, { state: { pickedFile: picked } satisfies UploadNavigationState });
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, camera: boolean) => {
+    const picked = e.target.files?.[0];
+    e.target.value = '';
+    if (!picked) return;
+    goToUploadWithFile(picked, camera);
+  };
+
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => handleFileInput(e, false)}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => handleFileInput(e, true)}
+      />
       {open &&
         createPortal(
           <button
@@ -203,7 +233,7 @@ export function HomeFab({ context, memberId }: { context: HomeContext; memberId?
                 label="Upload document"
                 onClick={() => {
                   close();
-                  navigate(uploadPath);
+                  fileInputRef.current?.click();
                 }}
               />
               <FabOption
@@ -221,7 +251,7 @@ export function HomeFab({ context, memberId }: { context: HomeContext; memberId?
                 label="Scan with camera"
                 onClick={() => {
                   close();
-                  navigate(`${uploadPath}${uploadPath.includes('?') ? '&' : '?'}source=camera`);
+                  cameraInputRef.current?.click();
                 }}
               />
               <FabOption

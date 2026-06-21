@@ -54,6 +54,17 @@ export async function extractOnDevice(
     raw.fullName = 'Aadhaar Holder';
     raw.dateOfBirth = '1990-01-01';
     raw.fathersName = 'Father Name';
+  } else if (docType === 'driving_license') {
+    raw.licenseNumber = 'DL' + Math.floor(10000000000 + Math.random() * 90000000000);
+    raw.fullName = 'License Holder';
+    raw.dateOfBirth = '1990-01-01';
+    raw.expiryDate = yearsAhead(10);
+  } else if (docType === 'voter_id') {
+    raw.voterIdNumber = 'ABC' + Math.floor(1000000 + Math.random() * 9000000);
+    raw.fullName = 'Voter Name';
+  } else if (docType === 'ration_card') {
+    raw.rationCardNumber = 'RC' + Math.floor(100000 + Math.random() * 900000);
+    raw.fullName = 'Family Head';
   } else if (docType === 'health_insurance') {
     raw.insurer = base.toLowerCase().includes('star') ? 'Star Health' : 'Health insurer';
     raw.policyNumber = 'SH-' + Math.floor(100000 + Math.random() * 900000);

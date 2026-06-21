@@ -17,6 +17,8 @@ import {
 } from '@/lib/planLimits';
 import { fieldLabelFor } from '@/lib/docFields';
 import { canDeleteDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
+import { isDocumentReviewed, isDocumentRejected, isDocumentUnderReview } from '@/lib/documentReview';
+import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
 import { UpgradeHint } from '@/components/UpgradeHint';
 
 function ShareWhatsAppIcon() {
@@ -151,11 +153,12 @@ export function DocumentDetailPage() {
   const [emailDuration, setEmailDuration] = useState<ShareDuration>('1h');
   const [urlDurationOpen, setUrlDurationOpen] = useState(false);
   const [urlDuration, setUrlDuration] = useState<ShareDuration>('1h');
+  const markDocumentReviewed = useVaultStore((s) => s.markDocumentReviewed);
+  const rejectDocument = useVaultStore((s) => s.rejectDocument);
   const navigate = useNavigate();
 
   const activeTempCount = countActiveTempLinks(allTempLinks);
   const shareHours = tempLinkDurationHours(user);
-  const canShare = canCreateTempLink(user, activeTempCount);
 
   useEffect(() => {
     if (!id || viewedRef.current === id) return;
@@ -197,6 +200,10 @@ export function DocumentDetailPage() {
 
   const backTo = documentBackPath(doc);
   const renewalEligible = expiryStatus(doc.expiryDate) === 'expiring' || expiryStatus(doc.expiryDate) === 'expired';
+  const canShare = canCreateTempLink(user, activeTempCount) && isDocumentReviewed(doc);
+  const needsReview = isDocumentUnderReview(doc);
+  const isRejected = isDocumentRejected(doc);
+  const reviewStatus = doc.reviewStatus ?? (doc.verificationStatus === 'pending' ? 'under_review' : 'reviewed');
   const viewer = members.find((m) => m.role === 'viewer' && m.status !== 'disabled');
   const canControlFamilyAccess = canManageDocumentFamilyAccess(doc, members, user, allDocuments);
   const canDelete = canDeleteDocument(doc, members, user, allDocuments);
@@ -322,18 +329,62 @@ export function DocumentDetailPage() {
 
         <DocTagChips doc={doc} />
 
-        {doc.verificationStatus === 'pending' && (
+        <div className="flex items-center justify-between gap-2">
+          <DocumentReviewStatus document={doc} />
+        </div>
+
+        {needsReview && (
           <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-            <p className="font-medium">Awaiting verification</p>
+            <p className="font-medium text-warning">Under review</p>
             <p className="mt-1 text-xs text-muted">
-              Confirm extracted fields to add this document to your vault.
+              Check the extracted details and file preview, then mark as reviewed or reject.
             </p>
-            <Link
-              to={`/upload?verify=${doc.id}`}
-              className="mt-2 inline-block text-xs font-medium text-accent-ink"
+            <div className="mt-3 flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  const ok = markDocumentReviewed(doc.id);
+                  if (!ok) setShareError('Could not mark as reviewed. Check your plan limits.');
+                }}
+              >
+                Mark reviewed
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={() => {
+                  rejectDocument(doc.id);
+                  navigate(backTo);
+                }}
+              >
+                Reject
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isRejected && (
+          <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm">
+            <p className="font-medium text-danger">Rejected</p>
+            <p className="mt-1 text-xs text-muted">
+              This document was not added to your vault. You can delete it or edit and review again.
+            </p>
+            <Button
+              variant="secondary"
+              className="mt-3 w-full"
+              onClick={() => markDocumentReviewed(doc.id)}
             >
-              Complete verification →
-            </Link>
+              Restore & mark reviewed
+            </Button>
+          </div>
+        )}
+
+        {reviewStatus === 'processing' && (
+          <div className="rounded-xl border border-border bg-surface-elevated p-4 text-sm">
+            <p className="font-medium">Processing upload</p>
+            <p className="mt-1 text-xs text-muted">
+              OCR is extracting fields from your file. This usually takes a few seconds.
+            </p>
           </div>
         )}
 

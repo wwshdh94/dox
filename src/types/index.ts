@@ -20,6 +20,9 @@ export type DocType =
   | 'passport'
   | 'pan'
   | 'aadhaar'
+  | 'driving_license'
+  | 'voter_id'
+  | 'ration_card'
   | 'vehicle_rc'
   | 'vehicle_puc'
   | 'vehicle_insurance'
@@ -37,6 +40,8 @@ export type DocType =
 export type MemberStatus = 'active' | 'disabled' | 'pending';
 export type MemberRole = 'owner' | 'viewer';
 export type MemberGender = 'male' | 'female';
+
+export type DocumentReviewStatus = 'processing' | 'under_review' | 'reviewed' | 'rejected';
 
 export interface User {
   id: string;
@@ -132,7 +137,9 @@ export interface Document {
   archivedAt?: string;
   fileName?: string;
   fileDataUrl?: string;
-  /** pending = uploaded, awaiting user verification; verified = confirmed in vault */
+  /** Upload → processing → under_review → reviewed | rejected */
+  reviewStatus?: DocumentReviewStatus;
+  /** @deprecated Use reviewStatus */
   verificationStatus?: 'pending' | 'verified';
   createdAt: string;
   updatedAt: string;
@@ -141,6 +148,8 @@ export interface Document {
 export type ActivityEvent =
   | 'uploaded'
   | 'verified'
+  | 'reviewed'
+  | 'rejected'
   | 'viewed'
   | 'shared'
   | 'revoked'

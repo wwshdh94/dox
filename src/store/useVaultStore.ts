@@ -15,6 +15,7 @@ import type {
 } from '@/types';
 import { uid } from '@/lib/format';
 import { canDeleteDocument, canManageDocumentFamilyAccess } from '@/lib/documentVisibility';
+import { isDocumentReviewed } from '@/lib/documentReview';
 import { canManageFamilyAccess } from '@/lib/family';
 import { appendAdminEvent } from '@/lib/adminEvents';
 import { syncPlatformHouseholdFromVault } from '@/lib/adminPlatformRegistry';
@@ -45,7 +46,8 @@ import {
   resolveDocumentMemberId,
 } from '@/lib/documentLimits';
 import { notifyMemberDocLimitReached, notifyMembersAtCap } from '@/lib/adminNotify';
-import { isDocumentVerified } from '@/lib/verificationQueue';
+import { extractOnDevice } from '@/lib/ocr';
+import { normalizeDocFields, documentExpiryFromFields } from '@/lib/docFields';
 import type { VaultExportPayload } from '@/lib/vaultBackup';
 import {
   clearBiometricCredential,
@@ -96,6 +98,17 @@ interface VaultState {
       Pick<Document, 'title' | 'expiryDate' | 'fields' | 'notes' | 'assetId' | 'memberId'>
     >,
   ) => boolean;
+  processNewUpload: (
+    id: string,
+    opts: { fileName: string; docType: Document['docType']; extractMode: 'manual' | 'on_device' | 'cloud' },
+  ) => Promise<void>;
+  markDocumentReviewed: (
+    id: string,
+    partial?: Partial<
+      Pick<Document, 'title' | 'expiryDate' | 'fields' | 'notes' | 'assetId' | 'memberId'>
+    >,
+  ) => boolean;
+  rejectDocument: (id: string) => void;
   updateDocument: (id: string, partial: Partial<Document>) => void;
   deleteDocument: (id: string) => void;
   markRenewed: (id: string) => void;
@@ -674,7 +687,7 @@ export const useVaultStore = create<VaultState>()(
       },
 
       addDocument: (d) => {
-        const status = d.verificationStatus ?? 'verified';
+        const status = d.reviewStatus ?? (d.verificationStatus === 'pending' ? 'under_review' : d.verificationStatus === 'verified' ? 'reviewed' : 'reviewed');
         const docs = get().documents;
         const user = get().user;
         const assets = get().assets;
@@ -683,7 +696,8 @@ export const useVaultStore = create<VaultState>()(
         const gate = checkCanAddDocument(user, docs, assets, members, {
           memberId: d.memberId,
           assetId: d.assetId,
-          verificationStatus: status,
+          reviewStatus: status,
+          verificationStatus: status === 'under_review' || status === 'processing' ? 'pending' : 'verified',
         });
         if (!gate.allowed) return '';
 
@@ -698,7 +712,8 @@ export const useVaultStore = create<VaultState>()(
             ...s.documents,
             {
               ...d,
-              verificationStatus: status,
+              reviewStatus: status,
+              verificationStatus: status === 'reviewed' ? 'verified' : status === 'under_review' || status === 'processing' ? 'pending' : undefined,
               domain: d.domain ?? tags.domain,
               category: d.category ?? tags.category,
               id,
@@ -707,7 +722,11 @@ export const useVaultStore = create<VaultState>()(
             },
           ],
         }));
-        get().logActivity('uploaded', { docType: d.docType, pending: status === 'pending' }, id);
+        get().logActivity(
+          'uploaded',
+          { docType: d.docType, pending: status === 'processing' || status === 'under_review' },
+          id,
+        );
 
         const memberId = resolveDocumentMemberId(
           { memberId: d.memberId, assetId: d.assetId },
@@ -733,7 +752,7 @@ export const useVaultStore = create<VaultState>()(
         }
 
         const currentUser = get().user;
-        if (currentUser?.referredBy && !currentUser.referralQualified && status !== 'pending') {
+        if (currentUser?.referredBy && !currentUser.referralQualified && status === 'reviewed') {
           const uploads = currentUser.referralUploads + 1;
           const qualified = uploads >= REFERRAL_QUALIFYING_UPLOADS;
           set((s) => ({
@@ -764,8 +783,60 @@ export const useVaultStore = create<VaultState>()(
       },
 
       verifyDocument: (id, partial) => {
+        return get().markDocumentReviewed(id, partial);
+      },
+
+      processNewUpload: async (id, opts) => {
         const doc = get().documents.find((d) => d.id === id);
-        if (!doc || isDocumentVerified(doc)) return false;
+        if (!doc || doc.reviewStatus !== 'processing') return;
+
+        try {
+          if (opts.extractMode === 'manual') {
+            set((s) => ({
+              documents: s.documents.map((d) =>
+                d.id === id
+                  ? { ...d, reviewStatus: 'under_review' as const, updatedAt: new Date().toISOString() }
+                  : d,
+              ),
+            }));
+            return;
+          }
+
+          const result = await extractOnDevice(opts.fileName, opts.docType);
+          const mapped = normalizeDocFields(opts.docType, result.fields);
+          const docTitle = mapped.productName
+            ? String(mapped.productName)
+            : opts.fileName.replace(/\.[^.]+$/, '');
+          const docExpiry = documentExpiryFromFields(opts.docType, mapped, result.expiryDate);
+
+          set((s) => ({
+            documents: s.documents.map((d) =>
+              d.id === id
+                ? {
+                    ...d,
+                    title: docTitle || d.title,
+                    fields: mapped,
+                    expiryDate: docExpiry ?? d.expiryDate,
+                    reviewStatus: 'under_review' as const,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : d,
+            ),
+          }));
+        } catch {
+          set((s) => ({
+            documents: s.documents.map((d) =>
+              d.id === id
+                ? { ...d, reviewStatus: 'under_review' as const, updatedAt: new Date().toISOString() }
+                : d,
+            ),
+          }));
+        }
+      },
+
+      markDocumentReviewed: (id, partial) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc || isDocumentReviewed(doc)) return false;
 
         const user = get().user;
         const gate = checkCanVerifyDocument(user, get().documents, doc);
@@ -777,13 +848,14 @@ export const useVaultStore = create<VaultState>()(
               ? {
                   ...d,
                   ...partial,
+                  reviewStatus: 'reviewed' as const,
                   verificationStatus: 'verified' as const,
                   updatedAt: new Date().toISOString(),
                 }
               : d,
           ),
         }));
-        get().logActivity('verified', {}, id);
+        get().logActivity('reviewed', {}, id);
 
         const currentUser = get().user;
         if (currentUser?.referredBy && !currentUser.referralQualified) {
@@ -814,6 +886,23 @@ export const useVaultStore = create<VaultState>()(
 
         get().syncPlatformMetrics();
         return true;
+      },
+
+      rejectDocument: (id) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc || isDocumentReviewed(doc)) return;
+        set((s) => ({
+          documents: s.documents.map((d) =>
+            d.id === id
+              ? {
+                  ...d,
+                  reviewStatus: 'rejected' as const,
+                  updatedAt: new Date().toISOString(),
+                }
+              : d,
+          ),
+        }));
+        get().logActivity('rejected', {}, id);
       },
 
       updateDocument: (id, partial) => {
@@ -1279,7 +1368,7 @@ export const useVaultStore = create<VaultState>()(
     }),
     {
       name: 'prevault-vault',
-      version: 5,
+      version: 6,
       partialize: (state) => {
         const { familyHomeView: _familyHomeView, ...persistedSettings } = state.settings;
         return { ...state, settings: persistedSettings };
@@ -1363,6 +1452,19 @@ export const useVaultStore = create<VaultState>()(
             lockPin: undefined,
           };
         }
+        if (version < 6 && state.documents) {
+          state.documents = state.documents.map((d) => {
+            const doc = d as Document;
+            if (doc.reviewStatus) return doc;
+            const reviewStatus =
+              doc.verificationStatus === 'pending'
+                ? 'under_review'
+                : doc.verificationStatus === 'verified'
+                  ? 'reviewed'
+                  : 'reviewed';
+            return { ...doc, reviewStatus };
+          });
+        }
         return state;
       },
     },
@@ -1377,7 +1479,7 @@ export function getExpiringDocuments(docs: Document[], withinDays = 30): Documen
 
   return docs.filter((d) => {
     if (d.archivedAt) return false;
-    if (d.verificationStatus === 'pending') return false;
+    if (!isDocumentReviewed(d)) return false;
     if (!d.expiryDate || d.renewedAt) return false;
     const exp = new Date(d.expiryDate);
     return exp <= limit;

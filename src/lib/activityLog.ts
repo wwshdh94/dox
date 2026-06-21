@@ -95,6 +95,10 @@ export function activityLabel(
       return 'Document uploaded';
     case 'verified':
       return 'Document verified';
+    case 'reviewed':
+      return 'Document reviewed';
+    case 'rejected':
+      return 'Document rejected';
     case 'viewed':
       return 'Document viewed';
     case 'deleted':

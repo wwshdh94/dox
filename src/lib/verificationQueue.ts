@@ -1,7 +1,13 @@
 import type { Document, User } from '@/types';
+import {
+  countReviewedDocuments,
+  countUnreviewedDocuments,
+  getDocumentsNeedingReview,
+  isDocumentReviewed,
+} from '@/lib/documentReview';
 import { isProUser } from '@/lib/planLimits';
 
-/** Max pending (unverified) documents before new uploads are blocked — all plans. */
+/** Max unreviewed documents before new uploads are blocked — all plans. */
 export const MAX_UNVERIFIED_DOCS_FREE = 5;
 export const MAX_UNVERIFIED_DOCS_PRO = 10;
 
@@ -10,26 +16,26 @@ export function maxUnverifiedDocuments(user: User | null): number {
 }
 
 export function isDocumentVerified(doc: Document): boolean {
-  return doc.verificationStatus !== 'pending';
+  return isDocumentReviewed(doc);
 }
 
 export function countVerifiedDocuments(documents: Document[]): number {
-  return documents.filter(isDocumentVerified).length;
+  return countReviewedDocuments(documents);
 }
 
 export function countUnverifiedDocuments(documents: Document[]): number {
-  return documents.filter((d) => d.verificationStatus === 'pending').length;
+  return countUnreviewedDocuments(documents);
 }
 
 export function getUnverifiedDocuments(documents: Document[]): Document[] {
-  return documents.filter((d) => d.verificationStatus === 'pending');
+  return getDocumentsNeedingReview(documents);
 }
 
-/** Whether user can start another upload / extraction (pending queue not full). */
+/** Whether user can start another upload (review queue not full). */
 export function canStageDocument(user: User | null, documents: Document[]): boolean {
-  return countUnverifiedDocuments(documents) < maxUnverifiedDocuments(user);
+  return countUnreviewedDocuments(documents) < maxUnverifiedDocuments(user);
 }
 
 export function remainingVerificationSlots(user: User | null, documents: Document[]): number {
-  return Math.max(0, maxUnverifiedDocuments(user) - countUnverifiedDocuments(documents));
+  return Math.max(0, maxUnverifiedDocuments(user) - countUnreviewedDocuments(documents));
 }

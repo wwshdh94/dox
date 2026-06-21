@@ -47,6 +47,9 @@ const TYPE_CATEGORY: Partial<Record<DocType, DocCategory>> = {
   passport: 'identity',
   pan: 'identity',
   aadhaar: 'identity',
+  driving_license: 'identity',
+  voter_id: 'identity',
+  ration_card: 'identity',
   vehicle_rc: 'vehicle',
   vehicle_puc: 'vehicle',
   vehicle_insurance: 'vehicle',
@@ -62,54 +65,20 @@ const TYPE_CATEGORY: Partial<Record<DocType, DocCategory>> = {
   other: 'other',
 };
 
-const TYPE_DOMAINS: Partial<Record<DocType, DocDomain[]>> = {
-  passport: ['family'],
-  pan: ['family'],
-  aadhaar: ['family'],
-  insurance: ['family'],
-  health_insurance: ['health'],
-  lab_report: ['health'],
-  prescription: ['health'],
-  vaccination: ['health'],
-  medical_bill: ['health'],
-  discharge_summary: ['health'],
-  vehicle_rc: ['family', 'assets'],
-  vehicle_puc: ['family', 'assets'],
-  vehicle_insurance: ['family', 'assets'],
-  purchase_receipt: ['assets'],
-  warranty: ['assets'],
-  other: ['family', 'health', 'assets'],
-};
-
 export function categoryForDocType(docType: DocType): DocCategory {
   return TYPE_CATEGORY[docType] ?? 'other';
 }
 
-/** Tab tags allowed for a document type. */
-export function domainsForDocType(docType: DocType): DocDomain[] {
-  return TYPE_DOMAINS[docType] ?? ['family'];
-}
-
-/** Category tags allowed for a document type. */
-export function categoriesForDocType(docType: DocType): DocCategory[] {
-  return [categoryForDocType(docType)];
-}
-
-export function defaultDomainForDocType(
+/** Suggested tab tag when document type changes — user may override. */
+export function suggestedDomainForDocType(
   docType: DocType,
   opts: { memberId?: string; assetId?: string; uploadContext?: string } = {},
 ): DocDomain {
-  const allowed = domainsForDocType(docType);
-  const inferred = inferDocTags(docType, opts).domain;
-  return allowed.includes(inferred) ? inferred : allowed[0]!;
+  return inferDocTags(docType, opts).domain;
 }
 
-export function coerceDomainForDocType(docType: DocType, domain: DocDomain): DocDomain {
-  const allowed = domainsForDocType(docType);
-  return allowed.includes(domain) ? domain : allowed[0]!;
-}
-
-export function coerceCategoryForDocType(docType: DocType): DocCategory {
+/** Suggested category tag when document type changes — user may override. */
+export function suggestedCategoryForDocType(docType: DocType): DocCategory {
   return categoryForDocType(docType);
 }
 

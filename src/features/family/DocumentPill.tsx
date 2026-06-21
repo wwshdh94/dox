@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/Card';
 import { DocTypeIcon } from '@/components/DocTypeIcon';
 import { ExpiryChip } from '@/components/ExpiryChip';
+import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
+import { isDocumentReviewed } from '@/lib/documentReview';
 import { resolveDocTags } from '@/lib/docTags';
 import { primaryRevealValue, normalizeDocFields } from '@/lib/docFields';
 import { maskAadhaar, maskValue } from '@/lib/format';
@@ -98,38 +100,41 @@ export function DocumentPill({
           className="rounded-l-[var(--radius-lg)]"
         />
         <div
-          className={`flex min-w-0 flex-1 flex-col justify-center ${compact ? 'gap-0 px-1.5 py-0.5' : 'gap-0.5 px-2 py-1'}`}
+          className={`flex min-w-0 flex-1 flex-col justify-center ${compact ? 'gap-3 px-1.5 py-1' : 'gap-3 px-2 py-1.5'}`}
         >
           <div className={`flex items-center justify-between ${compact ? 'gap-1' : 'gap-1.5'}`}>
             <p
-              className={`min-w-0 truncate font-medium leading-tight ${compact ? 'text-xs' : 'text-sm'}`}
+              className={`min-w-0 flex-1 truncate font-medium leading-tight ${compact ? 'text-xs' : 'text-sm'}`}
             >
               {document.title}
             </p>
+            <DocumentReviewStatus document={document} compact={compact} />
+          </div>
+          <div className={`flex items-center justify-between ${compact ? 'gap-1' : 'gap-1.5'}`}>
+            <div className="flex min-w-0 flex-1 items-center">
+              {value && isDocumentReviewed(document) ? (
+                <>
+                  <span
+                    className={`truncate font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}
+                  >
+                    {revealed ? value : maskField(document.docType, value)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={toggleReveal}
+                    aria-label={revealed ? 'Hide value' : 'Show value'}
+                    aria-pressed={revealed}
+                    className="shrink-0 text-accent-ink ml-[2ch]"
+                  >
+                    <EyeToggleIcon revealed={revealed} compact={compact} />
+                  </button>
+                </>
+              ) : null}
+            </div>
             {document.expiryDate ? (
-              <span className="shrink-0">
-                <ExpiryChip date={document.expiryDate} compact tiny={compact} />
-              </span>
+              <ExpiryChip date={document.expiryDate} compact tiny={compact} />
             ) : null}
           </div>
-          {value ? (
-            <div className="flex items-center">
-              <span
-                className={`truncate font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}
-              >
-                {revealed ? value : maskField(document.docType, value)}
-              </span>
-              <button
-                type="button"
-                onClick={toggleReveal}
-                aria-label={revealed ? 'Hide value' : 'Show value'}
-                aria-pressed={revealed}
-                className="shrink-0 text-accent-ink ml-[2ch]"
-              >
-                <EyeToggleIcon revealed={revealed} compact={compact} />
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
     </Card>

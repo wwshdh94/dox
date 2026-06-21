@@ -8,6 +8,7 @@ import {
   type FamilyDocFilterId,
 } from '@/lib/docCategoryFilter';
 import { getSessionMember } from '@/lib/family';
+import { reviewStatusSortRank } from '@/lib/documentReview';
 import { visibleMemberFamilyDocs } from '@/lib/documentVisibility';
 import { useVaultStore } from '@/store/useVaultStore';
 
@@ -30,10 +31,14 @@ export function MemberVaultPanel({
   );
   const availableFilters = useMemo(() => activeFamilyDocFilters(familyDocs), [familyDocs]);
   const [categoryFilter, setCategoryFilter] = useState<FamilyDocFilterId>('all');
-  const filteredDocs = useMemo(
-    () => filterFamilyDocs(familyDocs, categoryFilter),
-    [familyDocs, categoryFilter],
-  );
+  const filteredDocs = useMemo(() => {
+    const docs = filterFamilyDocs(familyDocs, categoryFilter);
+    return [...docs].sort((a, b) => {
+      const rank = reviewStatusSortRank(a) - reviewStatusSortRank(b);
+      if (rank !== 0) return rank;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  }, [familyDocs, categoryFilter]);
   const navigate = useNavigate();
 
   useEffect(() => {
