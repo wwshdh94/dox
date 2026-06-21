@@ -15,7 +15,10 @@ import {
   canCreateTempLink,
   tempLinkDurationHours,
 } from '@/lib/planLimits';
-import { fieldLabelFor } from '@/lib/docFields';
+import { fieldLabelFor, normalizeDocFields } from '@/lib/docFields';
+import { suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags } from '@/lib/docTags';
+import { memberSelectLabel } from '@/lib/family';
+import type { DocType } from '@/types';
 import { canDeleteDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
 import { isDocumentReviewed, isDocumentRejected, isDocumentUnderReview } from '@/lib/documentReview';
 import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
@@ -120,6 +123,31 @@ function shareDurationToOpts(duration: ShareDuration): { hours?: number; permane
   }
 }
 
+const HEALTH_REVIEW_DOC_TYPES: { value: DocType; label: string }[] = [
+  { value: 'health_insurance', label: 'Health insurance' },
+  { value: 'lab_report', label: 'Lab report' },
+  { value: 'prescription', label: 'Prescription' },
+  { value: 'vaccination', label: 'Vaccination' },
+  { value: 'medical_bill', label: 'Medical bill' },
+  { value: 'discharge_summary', label: 'Discharge summary' },
+];
+
+const FAMILY_REVIEW_DOC_TYPES: { value: DocType; label: string }[] = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'pan', label: 'PAN' },
+  { value: 'aadhaar', label: 'Aadhaar' },
+  { value: 'driving_license', label: 'Driving license' },
+  { value: 'voter_id', label: 'Voter ID' },
+  { value: 'ration_card', label: 'Ration card' },
+  { value: 'vehicle_rc', label: 'Vehicle RC' },
+  { value: 'vehicle_puc', label: 'PUC' },
+  { value: 'vehicle_insurance', label: 'Vehicle insurance' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'purchase_receipt', label: 'Purchase / Invoice' },
+  { value: 'warranty', label: 'Warranty card' },
+  { value: 'other', label: 'Other' },
+];
+
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const allDocuments = useVaultStore((s) => s.documents);
@@ -204,6 +232,26 @@ export function DocumentDetailPage() {
   const needsReview = isDocumentUnderReview(doc);
   const isRejected = isDocumentRejected(doc);
   const reviewStatus = doc.reviewStatus ?? (doc.verificationStatus === 'pending' ? 'under_review' : 'reviewed');
+  const tags = resolveDocTags(doc);
+  const reviewDocTypes = tags.domain === 'health' ? HEALTH_REVIEW_DOC_TYPES : FAMILY_REVIEW_DOC_TYPES;
+  const showReviewMeta = reviewStatus === 'processing' || needsReview || isRejected;
+
+  const handleReviewDocTypeChange = (next: DocType) => {
+    updateDocument(doc.id, {
+      docType: next,
+      fields: normalizeDocFields(next, doc.fields),
+      category: suggestedCategoryForDocType(next),
+      domain: suggestedDomainForDocType(next, {
+        memberId: doc.memberId,
+        assetId: doc.assetId,
+        uploadContext: tags.domain === 'health' ? 'health' : undefined,
+      }),
+    });
+  };
+
+  const handleReviewMemberChange = (nextMemberId: string) => {
+    updateDocument(doc.id, { memberId: nextMemberId || undefined });
+  };
   const viewer = members.find((m) => m.role === 'viewer' && m.status !== 'disabled');
   const canControlFamilyAccess = canManageDocumentFamilyAccess(doc, members, user, allDocuments);
   const canDelete = canDeleteDocument(doc, members, user, allDocuments);
@@ -332,6 +380,41 @@ export function DocumentDetailPage() {
         <div className="flex items-center justify-between gap-2">
           <DocumentReviewStatus document={doc} />
         </div>
+
+        {showReviewMeta && (
+          <section className="surface-panel space-y-3 p-4">
+            <p className="section-label">Document details</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Select
+                label="Document type"
+                value={doc.docType}
+                onChange={(e) => handleReviewDocTypeChange(e.target.value as DocType)}
+              >
+                {reviewDocTypes.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </Select>
+              {doc.docType !== 'purchase_receipt' && members.length > 0 && (
+                <Select
+                  label="Family member"
+                  value={doc.memberId ?? ''}
+                  onChange={(e) => handleReviewMemberChange(e.target.value)}
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {memberSelectLabel(m)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+            <p className="text-xs text-muted">
+              Pre-filled from where you uploaded. Adjust before marking reviewed.
+            </p>
+          </section>
+        )}
 
         {needsReview && (
           <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">

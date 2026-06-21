@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
@@ -25,11 +25,15 @@ import { getDocumentsNeedingReview, isDocumentUnderReview } from '@/lib/document
 import { checkCanAddDocument } from '@/lib/documentLimits';
 import { isEditableCameraImage } from '@/lib/imageEdit';
 import type { UploadNavigationState } from '@/lib/uploadNavigation';
+import {
+  initialDocTypeFromUploadParams,
+  initialMemberIdFromUploadParams,
+} from '@/lib/uploadNavigation';
 import { ImageEditor } from '@/components/ImageEditor';
 import { useVaultStore } from '@/store/useVaultStore';
 import type { DocCategory, DocDomain, DocType } from '@/types';
 
-type ExtractMode = 'manual' | 'on_device' | 'cloud';
+type ExtractMode = 'on_device' | 'cloud';
 
 const ALL_DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'passport', label: 'Passport' },
@@ -79,14 +83,8 @@ export function UploadPage() {
   const [extractMode, setExtractMode] = useState<ExtractMode>('on_device');
   const [step, setStep] = useState<'pick' | 'edit' | 'verify'>(isEdit ? 'verify' : 'pick');
   const isHealth = params.get('context') === 'health';
-  const [docType, setDocType] = useState<DocType>(
-    params.get('type') === 'purchase'
-      ? 'purchase_receipt'
-      : isHealth
-        ? 'health_insurance'
-        : 'passport',
-  );
-  const [memberId, setMemberId] = useState(params.get('member') ?? members[0]?.id ?? '');
+  const [docType, setDocType] = useState<DocType>(() => initialDocTypeFromUploadParams(params));
+  const [memberId, setMemberId] = useState(() => initialMemberIdFromUploadParams(params, members));
   const [assetId] = useState(params.get('asset') ?? '');
   const [fields, setFields] = useState<Record<string, string>>(() => emptyFieldsFor(docType));
   const [title, setTitle] = useState('');
@@ -116,7 +114,7 @@ export function UploadPage() {
   const verifySlotsLeft = user ? remainingVerificationSlots(user, documents) : null;
   const canStage = canStageDocument(user, documents);
 
-  const isPurchase = docType === 'purchase_receipt' || params.get('type') === 'purchase';
+  const isPurchase = params.get('type') === 'purchase' || docType === 'purchase_receipt';
   const isCamera = params.get('source') === 'camera';
 
   useEffect(() => {
@@ -214,13 +212,6 @@ export function UploadPage() {
     input?.click();
   };
 
-  const uploadDestination = () => {
-    if (isHealth && memberId) return `/health/${memberId}`;
-    if (isPurchase) return '/assets';
-    if (memberId) return `/family/${memberId}`;
-    return backTo.includes('upload') ? '/' : backTo;
-  };
-
   const submitNewUpload = async (mode: ExtractMode) => {
     if (!file) return;
     setLimitError('');
@@ -269,7 +260,7 @@ export function UploadPage() {
         return;
       }
 
-      navigate(uploadDestination());
+      navigate(`/documents/${id}`);
       void useVaultStore.getState().processNewUpload(id, {
         fileName: file.name,
         docType,
@@ -283,11 +274,6 @@ export function UploadPage() {
   const runExtract = async () => {
     if (!file) return;
     await submitNewUpload(extractMode);
-  };
-
-  const continueManual = async () => {
-    if (!file) return;
-    await submitNewUpload('manual');
   };
 
   const save = async () => {
@@ -345,32 +331,6 @@ export function UploadPage() {
       return;
     }
   };
-
-  const docTypes: { value: DocType; label: string }[] = useMemo(() => {
-    if (isHealth) {
-      return [
-        { value: 'health_insurance', label: 'Health insurance' },
-        { value: 'lab_report', label: 'Lab report' },
-        { value: 'prescription', label: 'Prescription' },
-        { value: 'vaccination', label: 'Vaccination' },
-        { value: 'medical_bill', label: 'Medical bill' },
-        { value: 'discharge_summary', label: 'Discharge summary' },
-      ];
-    }
-    return [
-      { value: 'passport', label: 'Passport' },
-      { value: 'pan', label: 'PAN' },
-      { value: 'aadhaar', label: 'Aadhaar' },
-      { value: 'driving_license', label: 'Driving license' },
-      { value: 'voter_id', label: 'Voter ID' },
-      { value: 'ration_card', label: 'Ration card' },
-      { value: 'vehicle_rc', label: 'RC' },
-      { value: 'vehicle_insurance', label: 'Vehicle insurance' },
-      { value: 'insurance', label: 'Insurance' },
-      { value: 'purchase_receipt', label: 'Purchase / Invoice' },
-      { value: 'other', label: 'Other' },
-    ];
-  }, [isHealth]);
 
   const handleEditDocTypeChange = (next: DocType) => {
     setDocType(next);
@@ -557,64 +517,28 @@ export function UploadPage() {
                   </Button>
                 )}
 
-            <Select
-              label="Document type"
-              value={docType}
-              onChange={(e) => {
-                const next = e.target.value as DocType;
-                setDocType(next);
-                setFields(emptyFieldsFor(next));
-              }}
-            >
-              {docTypes.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </Select>
-
-            {!isPurchase && (
-              <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>{memberSelectLabel(m)}</option>
-                ))}
-              </Select>
-            )}
-
             <RadioGroup
-              label="How to process"
+              label="Auto extract data"
               name="extract"
               value={extractMode}
               onChange={setExtractMode}
               options={[
-                { value: 'on_device', label: 'On-device OCR', hint: 'Private — stays on your phone' },
+                { value: 'on_device', label: 'On-device', hint: 'Private — stays on your phone' },
                 {
                   value: 'cloud',
-                  label: 'Cloud AI (Pro)',
+                  label: 'Cloud AI',
                   hint: 'Sends image for better accuracy',
                   disabled: !(settings.cloudAiEnabled && user?.plan === 'pro'),
                 },
-                { value: 'manual', label: 'Manual entry', hint: 'Store file without extraction' },
               ]}
             />
 
             <Button
               className="w-full"
               disabled={!file || !canStage}
-              onClick={() =>
-                extractMode === 'manual' ? void continueManual() : void runExtract()
-              }
+              onClick={() => void runExtract()}
             >
               Continue
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
-              disabled={!canStage}
-              onClick={() => {
-                setTitle(file?.name ?? 'Document');
-                void continueManual();
-              }}
-            >
-              Store only (manual entry)
             </Button>
               </>
             )}
