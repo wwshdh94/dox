@@ -5,6 +5,7 @@ import { ExpiringBanner, ExpiryChip } from '@/components/ExpiryChip';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
+import { DocumentPill } from '@/features/family/DocumentPill';
 import { getExpiringDocuments, useVaultStore } from '@/store/useVaultStore';
 import { daysUntil } from '@/lib/format';
 import { MemberAvatar } from '@/components/MemberAvatar';
@@ -117,22 +118,14 @@ export function FamilyPage() {
             {searchResults.length === 0 && (
               <p className="text-sm text-muted">No documents match &ldquo;{search.trim()}&rdquo;.</p>
             )}
-            {searchResults.map((d) => {
-              const member = members.find((m) => m.id === d.memberId);
-              return (
-                <Card key={d.id} onClick={() => navigate(`/documents/${d.id}`)}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium">{d.title}</p>
-                      <p className="text-xs text-muted">
-                        {member?.displayName ?? 'Household'} · {d.docType.replace(/_/g, ' ')}
-                      </p>
-                    </div>
-                    <ExpiryChip date={d.expiryDate} />
-                  </div>
-                </Card>
-              );
-            })}
+            {searchResults.map((d) => (
+              <DocumentPill
+                key={d.id}
+                document={d}
+                compact
+                onOpen={() => navigate(`/documents/${d.id}`)}
+              />
+            ))}
           </section>
         ) : familyHomeView === 'me' ? (
           owner ? (
@@ -207,7 +200,6 @@ export function ExpiringPage() {
   const shareGrants = useVaultStore((s) => s.shareGrants);
   const user = useVaultStore((s) => s.user);
   const members = useVaultStore((s) => s.members);
-  const assets = useVaultStore((s) => s.assets);
   const [searchParams] = useSearchParams();
   const memberId = searchParams.get('member') ?? undefined;
   const navigate = useNavigate();
@@ -230,21 +222,14 @@ export function ExpiringPage() {
       />
       <main className="page-main animate-fade-up space-y-3">
         {expiring.length === 0 && <p className="text-sm text-muted">Nothing expiring in 30 days.</p>}
-        {expiring.map((d) => {
-          const docMember = members.find((m) => m.id === d.memberId);
-          const asset = assets.find((a) => a.id === d.assetId);
-          return (
-            <Card key={d.id} onClick={() => navigate(`/documents/${d.id}`)}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{d.title}</p>
-                  <p className="text-xs text-muted">{docMember?.displayName ?? asset?.label}</p>
-                </div>
-                <ExpiryChip date={d.expiryDate} />
-              </div>
-            </Card>
-          );
-        })}
+        {expiring.map((d) => (
+          <DocumentPill
+            key={d.id}
+            document={d}
+            compact
+            onOpen={() => navigate(`/documents/${d.id}`)}
+          />
+        ))}
       </main>
       <BottomNav />
     </div>

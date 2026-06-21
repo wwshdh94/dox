@@ -62,6 +62,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Due soon filter pill** — member pages show warning-styled "Due soon" filter alongside ID/Travel/Vehicle/Insurance; clickable stats + expiring banner per member
 - [x] **Document review status flow** — upload → OCR (`processing`) → home pill (`under_review`, orange) → user marks **Reviewed** (green) or **Rejected** (red) on document detail; share/expiry gated until reviewed (`src/lib/documentReview.ts`, store v6 migration)
 - [x] **Camera photo editor** — after device camera capture: 4-corner crop, brightness/contrast/color sliders, HDR toggle; canvas export before upload (`src/components/ImageEditor.tsx`, `src/lib/imageEdit.ts`)
+- [x] **Family document parity** — shared `DocumentPill` in search/expiring lists; member-scoped review banner; `canManageDocument` gates edit/share/review/archive on detail, upload, and store
 
 ## In progress
 

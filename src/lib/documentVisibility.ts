@@ -113,8 +113,8 @@ export function isMinorManagedDocument(
   return Boolean(docOwner && memberIsMinor(docOwner, documents));
 }
 
-/** Who may permanently delete this document. */
-export function canDeleteDocument(
+/** Who may edit, share, review, archive, renew, or delete this document. */
+export function canManageDocument(
   doc: Document,
   members: FamilyMember[],
   user: User | null | undefined,
@@ -140,4 +140,14 @@ export function canDeleteDocument(
   }
 
   return false;
+}
+
+/** Who may permanently delete this document. */
+export function canDeleteDocument(
+  doc: Document,
+  members: FamilyMember[],
+  user: User | null | undefined,
+  documents: Document[],
+): boolean {
+  return canManageDocument(doc, members, user, documents);
 }

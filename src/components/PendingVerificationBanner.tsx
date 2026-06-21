@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import { getDocumentsNeedingReview } from '@/lib/documentReview';
 import { useVaultStore } from '@/store/useVaultStore';
 
-export function PendingVerificationBanner() {
+export function PendingVerificationBanner({ memberId }: { memberId?: string }) {
   const documents = useVaultStore((s) => s.documents);
-  const pending = getDocumentsNeedingReview(documents);
+  const pending = getDocumentsNeedingReview(documents).filter(
+    (d) => !memberId || d.memberId === memberId,
+  );
 
   if (pending.length === 0) return null;
 

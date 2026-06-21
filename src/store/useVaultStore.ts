@@ -14,7 +14,7 @@ import type {
   VisitingCard,
 } from '@/types';
 import { uid } from '@/lib/format';
-import { canDeleteDocument, canManageDocumentFamilyAccess } from '@/lib/documentVisibility';
+import { canDeleteDocument, canManageDocument, canManageDocumentFamilyAccess } from '@/lib/documentVisibility';
 import { isDocumentReviewed } from '@/lib/documentReview';
 import { canManageFamilyAccess } from '@/lib/family';
 import { appendAdminEvent } from '@/lib/adminEvents';
@@ -837,6 +837,7 @@ export const useVaultStore = create<VaultState>()(
       markDocumentReviewed: (id, partial) => {
         const doc = get().documents.find((d) => d.id === id);
         if (!doc || isDocumentReviewed(doc)) return false;
+        if (!canManageDocument(doc, get().members, get().user, get().documents)) return false;
 
         const user = get().user;
         const gate = checkCanVerifyDocument(user, get().documents, doc);
@@ -891,6 +892,7 @@ export const useVaultStore = create<VaultState>()(
       rejectDocument: (id) => {
         const doc = get().documents.find((d) => d.id === id);
         if (!doc || isDocumentReviewed(doc)) return;
+        if (!canManageDocument(doc, get().members, get().user, get().documents)) return;
         set((s) => ({
           documents: s.documents.map((d) =>
             d.id === id
@@ -906,6 +908,8 @@ export const useVaultStore = create<VaultState>()(
       },
 
       updateDocument: (id, partial) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc || !canManageDocument(doc, get().members, get().user, get().documents)) return;
         set((s) => ({
           documents: s.documents.map((d) =>
             d.id === id ? { ...d, ...partial, updatedAt: new Date().toISOString() } : d,
@@ -930,6 +934,8 @@ export const useVaultStore = create<VaultState>()(
       },
 
       markRenewed: (id) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc || !canManageDocument(doc, get().members, get().user, get().documents)) return;
         const now = new Date().toISOString();
         set((s) => ({
           documents: s.documents.map((d) =>
@@ -940,6 +946,8 @@ export const useVaultStore = create<VaultState>()(
       },
 
       archiveDocument: (id) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc || !canManageDocument(doc, get().members, get().user, get().documents)) return;
         const now = new Date().toISOString();
         set((s) => ({
           documents: s.documents.map((d) =>
@@ -1019,7 +1027,11 @@ export const useVaultStore = create<VaultState>()(
       },
 
       createTempLink: (documentId, opts) => {
-        const { user, tempLinks } = get();
+        const { user, tempLinks, documents, members } = get();
+        const doc = documents.find((d) => d.id === documentId);
+        if (!doc || !canManageDocument(doc, members, user, documents) || !isDocumentReviewed(doc)) {
+          return null;
+        }
         const activeCount = countActiveTempLinks(tempLinks);
         if (!canCreateTempLink(user, activeCount)) return null;
 

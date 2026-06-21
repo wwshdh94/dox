@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/Card';
-import { ExpiringBanner, ExpiryChip } from '@/components/ExpiryChip';
+import { ExpiringBanner } from '@/components/ExpiryChip';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { MemberDocStats } from '@/components/MemberDocStats';
 import { PendingVerificationBanner } from '@/components/PendingVerificationBanner';
+import { DocumentPill } from '@/features/family/DocumentPill';
 import { dismissExpiringBanner, isExpiringBannerDismissed } from '@/lib/expiringBanner';
 import { canViewDocument } from '@/lib/documentVisibility';
 import { isHealthDomainDoc } from '@/lib/docTags';
@@ -58,7 +58,7 @@ export function MemberVaultContent({ memberId }: { memberId: string }) {
 
   return (
     <div className="space-y-5">
-      <PendingVerificationBanner />
+      <PendingVerificationBanner memberId={memberId} />
       {!bannerDismissed && expiringDocs.length > 0 && (
         <ExpiringBanner
           count={expiringDocs.length}
@@ -155,15 +155,12 @@ export function MemberVaultView({ memberId }: { memberId: string }) {
             <p className="text-sm text-muted">No documents match &ldquo;{search.trim()}&rdquo;.</p>
           )}
           {searchResults.map((d) => (
-            <Card key={d.id} onClick={() => navigate(`/documents/${d.id}`)}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium">{d.title}</p>
-                  <p className="text-xs text-muted">{d.docType.replace(/_/g, ' ')}</p>
-                </div>
-                <ExpiryChip date={d.expiryDate} />
-              </div>
-            </Card>
+            <DocumentPill
+              key={d.id}
+              document={d}
+              compact
+              onOpen={() => navigate(`/documents/${d.id}`)}
+            />
           ))}
         </section>
       ) : (

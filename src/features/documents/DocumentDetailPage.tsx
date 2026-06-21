@@ -19,7 +19,7 @@ import { fieldLabelFor, normalizeDocFields } from '@/lib/docFields';
 import { suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags } from '@/lib/docTags';
 import { memberSelectLabel } from '@/lib/family';
 import type { DocType } from '@/types';
-import { canDeleteDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
+import { canDeleteDocument, canManageDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
 import { isDocumentReviewed, isDocumentRejected, isDocumentUnderReview } from '@/lib/documentReview';
 import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
 import { UpgradeHint } from '@/components/UpgradeHint';
@@ -228,7 +228,8 @@ export function DocumentDetailPage() {
 
   const backTo = documentBackPath(doc);
   const renewalEligible = expiryStatus(doc.expiryDate) === 'expiring' || expiryStatus(doc.expiryDate) === 'expired';
-  const canShare = canCreateTempLink(user, activeTempCount) && isDocumentReviewed(doc);
+  const canManage = canManageDocument(doc, members, user, allDocuments);
+  const canShare = canManage && canCreateTempLink(user, activeTempCount) && isDocumentReviewed(doc);
   const needsReview = isDocumentUnderReview(doc);
   const isRejected = isDocumentRejected(doc);
   const reviewStatus = doc.reviewStatus ?? (doc.verificationStatus === 'pending' ? 'under_review' : 'reviewed');
@@ -380,7 +381,7 @@ export function DocumentDetailPage() {
           <DocTagChips doc={doc} />
         </div>
 
-        {showReviewMeta && (
+        {showReviewMeta && canManage && (
           <section className="surface-panel space-y-3 p-4">
             <p className="section-label">Document details</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -415,7 +416,22 @@ export function DocumentDetailPage() {
           </section>
         )}
 
-        {needsReview && (
+        {needsReview && !canManage && (
+          <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
+            <p className="font-medium text-warning">Under review</p>
+            <p className="mt-1 text-xs text-muted">
+              The document owner or vault manager must review extracted details before sharing.
+            </p>
+          </div>
+        )}
+
+        {isRejected && !canManage && (
+          <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm">
+            <p className="font-medium text-danger">Rejected</p>
+            <p className="mt-1 text-xs text-muted">This document was not added to the vault.</p>
+          </div>
+        )}
+        {needsReview && canManage && (
           <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
             <p className="font-medium text-warning">Under review</p>
             <p className="mt-1 text-xs text-muted">
@@ -445,7 +461,7 @@ export function DocumentDetailPage() {
           </div>
         )}
 
-        {isRejected && (
+        {isRejected && canManage && (
           <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm">
             <p className="font-medium text-danger">Rejected</p>
             <p className="mt-1 text-xs text-muted">
@@ -484,7 +500,7 @@ export function DocumentDetailPage() {
           ))}
         </div>
 
-        {notesOpen ? (
+        {notesOpen && canManage ? (
           <Textarea
             label="Notes"
             value={notes}
@@ -492,7 +508,12 @@ export function DocumentDetailPage() {
             onChange={(e) => setNotes(e.target.value)}
             onBlur={saveNotes}
           />
-        ) : (
+        ) : notes.trim() ? (
+          <div className="surface-panel p-4 text-sm">
+            <p className="text-xs font-semibold tracking-wide text-muted">Notes</p>
+            <p className="mt-2 whitespace-pre-wrap">{notes}</p>
+          </div>
+        ) : canManage ? (
           <button
             type="button"
             onClick={() => setNotesOpen(true)}
@@ -500,27 +521,31 @@ export function DocumentDetailPage() {
           >
             Tap to add notes
           </button>
-        )}
+        ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setShareChoiceOpen(true)}
-            disabled={!canShare}
-          >
-            Share
-          </Button>
-          <Button variant="secondary" onClick={() => navigate(`/upload?edit=${doc.id}`)}>
-            Edit
-          </Button>
-          {renewalEligible && (
-            <Button variant="secondary" onClick={() => markRenewed(doc.id)}>
-              Mark renewed
-            </Button>
-          )}
-          {minorManaged && !canControlFamilyAccess ? (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <div className="flex w-1/2 min-w-0 gap-2">
+              <Button
+                variant="secondary"
+                className="min-w-0 flex-1"
+                onClick={() => setShareChoiceOpen(true)}
+                disabled={!canShare}
+              >
+                Share
+              </Button>
+              <Button
+                variant="secondary"
+                className="min-w-0 flex-1"
+                onClick={() => navigate(`/upload?edit=${doc.id}`)}
+                disabled={!canManage}
+              >
+                Edit
+              </Button>
+            </div>
+            {minorManaged && !canControlFamilyAccess ? (
             <div
-              className="flex min-h-11 min-w-[10.5rem] flex-1 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 opacity-60 shadow-sm sm:flex-none"
+              className="flex min-h-11 w-1/2 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 opacity-60 shadow-sm"
               title="Ask a parent or guardian to change family access or delete this document"
             >
               <span className="text-sm font-semibold tracking-tight text-text">Family access</span>
@@ -539,7 +564,7 @@ export function DocumentDetailPage() {
             </div>
           ) : (
           <div
-            className={`flex min-h-11 min-w-[10.5rem] flex-1 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 shadow-sm sm:flex-none ${
+            className={`flex min-h-11 w-1/2 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 shadow-sm ${
               viewer && canControlFamilyAccess ? '' : 'opacity-60'
             }`}
             title={
@@ -586,10 +611,16 @@ export function DocumentDetailPage() {
             </div>
           </div>
           )}
+          </div>
+          {renewalEligible && canManage && (
+            <Button variant="secondary" className="w-full" onClick={() => markRenewed(doc.id)}>
+              Mark renewed
+            </Button>
+          )}
         </div>
 
         {shareError && <p className="text-sm text-danger">{shareError}</p>}
-        {!canShare && (
+        {canManage && !canShare && (
           <UpgradeHint message="Free plan allows 2 active temp links. Pro extends link duration to 24 hours." />
         )}
 
@@ -603,7 +634,12 @@ export function DocumentDetailPage() {
         </Link>
 
         <div className="flex gap-2">
-          <Button variant="secondary" className="w-full" onClick={() => setArchiveOpen(true)}>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={!canManage}
+            onClick={() => setArchiveOpen(true)}
+          >
             Archive
           </Button>
           <Button

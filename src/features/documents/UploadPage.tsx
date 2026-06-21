@@ -23,6 +23,7 @@ import {
 } from '@/lib/verificationQueue';
 import { getDocumentsNeedingReview, isDocumentUnderReview } from '@/lib/documentReview';
 import { checkCanAddDocument } from '@/lib/documentLimits';
+import { canManageDocument, canViewDocument } from '@/lib/documentVisibility';
 import { isEditableCameraImage } from '@/lib/imageEdit';
 import type { UploadNavigationState } from '@/lib/uploadNavigation';
 import {
@@ -70,6 +71,7 @@ export function UploadPage() {
   const assets = useVaultStore((s) => s.assets);
   const members = useVaultStore((s) => s.members);
   const documents = useVaultStore((s) => s.documents);
+  const shareGrants = useVaultStore((s) => s.shareGrants);
   const settings = useVaultStore((s) => s.settings);
   const user = useVaultStore((s) => s.user);
   const addDocument = useVaultStore((s) => s.addDocument);
@@ -393,6 +395,35 @@ export function UploadPage() {
       : isHealth
         ? 'Add health record'
         : 'Add document';
+
+  if (isEdit && !editingDoc) {
+    return (
+      <div className="min-h-full pb-28">
+        <Header title="Edit document" backFallback="/" />
+        <main className="page-main animate-fade-up">
+          <p className="text-sm text-muted">Document not found.</p>
+        </main>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  if (
+    isEdit &&
+    editingDoc &&
+    (!canViewDocument(editingDoc, members, user, shareGrants, documents) ||
+      !canManageDocument(editingDoc, members, user, documents))
+  ) {
+    return (
+      <div className="min-h-full pb-28">
+        <Header title="Edit document" backFallback={`/documents/${editId}`} />
+        <main className="page-main animate-fade-up">
+          <p className="text-sm text-muted">You don&apos;t have permission to edit this document.</p>
+        </main>
+        <BottomNav />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full pb-28">

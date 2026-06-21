@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canDeleteDocument,
+  canManageDocument,
   canManageDocumentFamilyAccess,
   canViewDocument,
   documentHasFamilyAccess,
@@ -132,7 +133,18 @@ describe('documentVisibility', () => {
     expect(canViewDocument(childDoc, members, childUser, grants, allDocs)).toBe(true);
     expect(canManageDocumentFamilyAccess(childDoc, members, childUser, allDocs)).toBe(false);
     expect(canManageDocumentFamilyAccess(childDoc, members, ownerUser, allDocs)).toBe(true);
+    expect(canManageDocument(childDoc, members, childUser, allDocs)).toBe(false);
+    expect(canManageDocument(childDoc, members, ownerUser, allDocs)).toBe(true);
     expect(canDeleteDocument(childDoc, members, childUser, allDocs)).toBe(false);
     expect(canDeleteDocument(childDoc, members, ownerUser, allDocs)).toBe(true);
+  });
+
+  it('blocks shared viewers from managing another member document', () => {
+    const passport = doc('d1', 'spouse');
+    const members = [owner, spouseJoined];
+    const grants: ShareGrant[] = [{ id: 'g1', documentId: 'd1', memberId: 'owner' }];
+
+    expect(canViewDocument(passport, members, ownerUser, grants, allDocs)).toBe(true);
+    expect(canManageDocument(passport, members, ownerUser, allDocs)).toBe(false);
   });
 });
