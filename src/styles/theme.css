@@ -195,6 +195,11 @@ a {
   color: var(--accent-ink);
 }
 
+/* Logo PNG — full white in dark mode */
+.dark .app-logo {
+  filter: brightness(0) invert(1);
+}
+
 /* Segmented control — inner radius = outer − padding */
 .segmented-control {
   --sc-outer: 0.75rem;

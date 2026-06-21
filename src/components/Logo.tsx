@@ -32,7 +32,7 @@ export function Logo({
     <img
       src={src}
       alt={alt}
-      className={`shrink-0 object-contain ${sizeClass} ${className}`}
+      className={`app-logo shrink-0 object-contain ${sizeClass} ${className}`}
       decoding="async"
     />
   );
