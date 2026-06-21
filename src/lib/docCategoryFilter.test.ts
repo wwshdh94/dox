@@ -13,6 +13,7 @@ function doc(partial: Partial<Document> & Pick<Document, 'id' | 'title' | 'docTy
     memberId: 'm1',
     fields: {},
     createdAt: '2025-01-01',
+    updatedAt: '2025-01-01',
     ...partial,
   };
 }
