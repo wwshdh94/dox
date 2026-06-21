@@ -375,10 +375,9 @@ export function DocumentDetailPage() {
       <main className="page-main w-full flex min-h-0 flex-1 flex-col space-y-4 animate-fade-up">
         <DocumentFilePreview fileName={doc.fileName} fileDataUrl={doc.fileDataUrl} />
 
-        <DocTagChips doc={doc} />
-
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-5">
           <DocumentReviewStatus document={doc} />
+          <DocTagChips doc={doc} />
         </div>
 
         {showReviewMeta && (
