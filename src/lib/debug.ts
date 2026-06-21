@@ -1,4 +1,4 @@
-const PREFIX = '[Dox]';
+const PREFIX = '[PreVault]';
 const MAX_RECENT = 20;
 
 export interface RecentErrorEntry {
@@ -22,7 +22,7 @@ function pushRecent(scope: string, message: string, detail?: unknown): void {
 function enabled(): boolean {
   if (import.meta.env.DEV) return true;
   try {
-    return localStorage.getItem('DOX_DEBUG') === '1';
+    return localStorage.getItem('PREVAULT_DEBUG') === '1';
   } catch {
     return false;
   }

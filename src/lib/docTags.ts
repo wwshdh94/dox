@@ -1,6 +1,6 @@
 import type { DocCategory, DocDomain, DocType, Document } from '@/types';
 
-/** Tab scope — where the document appears in Dox. */
+/** Tab scope — where the document appears in PreVault. */
 export const DOC_DOMAINS: DocDomain[] = ['family', 'health', 'assets'];
 
 /** Subject-matter class (ISO 15489 / household records adapted for India). */

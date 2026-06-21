@@ -2,7 +2,7 @@ import type { FamilyMember, User } from '@/types';
 import { appendAdminEvent } from '@/lib/adminEvents';
 import { PRODUCTION_MAX_DOCS_PER_MEMBER } from '@/lib/documentLimits';
 
-const DEDUPE_KEY = 'dox-admin-limit-alerts';
+const DEDUPE_KEY = 'prevault-admin-limit-alerts';
 
 interface LimitAlertRecord {
   at: string;
@@ -66,7 +66,7 @@ export async function notifyMemberDocLimitReached(
   }
 
   if (import.meta.env.DEV) {
-    console.info('[Dox admin] member_doc_limit_reached', body);
+    console.info('[PreVault admin] member_doc_limit_reached', body);
   }
 
   ledger[member.id] = { at: body.at, count: documentCount };

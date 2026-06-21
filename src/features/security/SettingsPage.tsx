@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { RadioGroup, Select } from '@/components/Input';
+import { RadioGroup } from '@/components/Input';
 import { useVaultStore } from '@/store/useVaultStore';
 import { canUseCloudAi, canUseEmailReminders } from '@/lib/planLimits';
 import { UpgradeHint } from '@/components/UpgradeHint';
-import type { ThemeMode } from '@/types';
 
 type ReminderMode = 'both' | 'push' | 'email' | 'off';
 type ExtractionMode = 'privacy' | 'cloud';
@@ -44,24 +43,13 @@ export function SettingsPage() {
 
   return (
     <div className="min-h-full pb-8">
-      <Header title="Settings" backFallback="/profile" />
+      <Header title="Account & reminders" backFallback="/profile" />
       <main className="page-main animate-fade-up space-y-6">
         <section className="space-y-3">
-          <p className="section-label">Appearance</p>
-          <Select
-            label="Theme"
-            value={settings.theme}
-            onChange={(e) => setSettings({ theme: e.target.value as ThemeMode })}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </Select>
-        </section>
-
-        <section className="surface-panel p-4">
+          <p className="section-label">Reminders</p>
+          <div className="surface-panel p-4">
           <RadioGroup
-            label="Reminders"
+            label="Expiry reminders"
             name="reminders"
             value={reminderMode(settings)}
             onChange={applyReminders}
@@ -80,11 +68,14 @@ export function SettingsPage() {
               </Link>
             </p>
           )}
+          </div>
         </section>
 
-        <section className="surface-panel p-4">
+        <section className="space-y-3">
+          <p className="section-label">Document extraction</p>
+          <div className="surface-panel p-4">
           <RadioGroup
-            label="Extraction"
+            label="AI extraction"
             name="extraction"
             value={settings.privacyMode ? 'privacy' : 'cloud'}
             onChange={applyExtraction}
@@ -103,12 +94,16 @@ export function SettingsPage() {
             ]}
           />
           {!cloudAllowed && <UpgradeHint message="Cloud AI extraction is included with Pro." />}
+          </div>
         </section>
 
         {settings.recoveryCode && (
-          <section className="surface-panel p-4 text-sm">
+          <section className="space-y-3">
+            <p className="section-label">Recovery</p>
+            <div className="surface-panel p-4 text-sm">
             <p className="font-medium">Recovery code</p>
             <p className="mt-1 font-mono text-muted">{settings.recoveryCode}</p>
+            </div>
           </section>
         )}
 

@@ -1,4 +1,4 @@
-# Dox — Document icon mockups (illustrative)
+# PreVault — Document icon mockups (illustrative)
 
 **Status:** Visual review — not in app UI yet.
 
@@ -6,7 +6,7 @@
 
 **Open in Finder:**
 ```bash
-open /Users/shdh94/projects/Dox/docs/mockups/icons/
+open /Users/shdh94/projects/PreVault/docs/mockups/icons/
 ```
 
 ---

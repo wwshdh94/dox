@@ -20,7 +20,7 @@ export interface AdminEvent {
   meta?: Record<string, string | number | boolean>;
 }
 
-const EVENTS_KEY = 'dox-admin-events';
+const EVENTS_KEY = 'prevault-admin-events';
 const MAX_EVENTS = 500;
 
 function readEvents(): AdminEvent[] {

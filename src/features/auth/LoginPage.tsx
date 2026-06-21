@@ -26,7 +26,7 @@ export function LoginPage() {
       <div className="mx-auto w-full max-w-sm animate-fade-up space-y-8">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-5 shadow-md" />
-          <h1 className="font-display text-4xl text-text">Dox</h1>
+          <h1 className="font-display text-4xl text-text">PreVault</h1>
           <p className="mt-3 text-sm leading-relaxed text-muted">
             Share documents. Never miss an expiry. Your family stays in the loop.
           </p>

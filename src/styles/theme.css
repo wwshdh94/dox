@@ -18,6 +18,10 @@
   --warning: #b8860b;
   --danger: #b54a4a;
   --success: #4d7c5f;
+  --gold: #c9a227;
+  --gold-light: #f0d56b;
+  --gold-dark: #9a7212;
+  --gold-border: #d4af37;
   --shadow-sm: 0 1px 2px rgb(31 28 26 / 0.04), 0 2px 8px rgb(31 28 26 / 0.03);
   --shadow-md: 0 4px 16px rgb(31 28 26 / 0.06), 0 1px 3px rgb(31 28 26 / 0.04);
   --shadow-lg: 0 12px 32px rgb(31 28 26 / 0.08), 0 4px 8px rgb(31 28 26 / 0.04);
@@ -43,6 +47,10 @@
   --warning: #d4a84b;
   --danger: #e07a7a;
   --success: #6ba382;
+  --gold: #ddb830;
+  --gold-light: #f2dc72;
+  --gold-dark: #a67c00;
+  --gold-border: #e8c547;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.2), 0 2px 8px rgb(0 0 0 / 0.15);
   --shadow-md: 0 4px 16px rgb(0 0 0 / 0.25), 0 1px 3px rgb(0 0 0 / 0.15);
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.35), 0 4px 8px rgb(0 0 0 / 0.2);
@@ -66,6 +74,9 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-gold-dark: var(--gold-dark);
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 }
@@ -110,11 +121,52 @@ a {
 }
 
 .page-main {
-  @apply mx-auto max-w-lg px-4 py-5;
+  @apply mx-auto max-w-lg px-4 py-5 text-sm leading-relaxed sm:text-base sm:leading-normal;
 }
 
 .section-label {
   @apply text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted;
+}
+
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.plan-badge--free {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border: 1px solid var(--border-soft);
+}
+
+.plan-badge--premium {
+  background: linear-gradient(
+    145deg,
+    var(--gold-light) 0%,
+    var(--gold) 42%,
+    var(--gold-dark) 100%
+  );
+  color: #231a08;
+  border: 1px solid color-mix(in srgb, var(--gold-border) 75%, white);
+  box-shadow:
+    0 1px 2px rgb(31 22 5 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.45);
+  text-shadow: 0 0.5px 0 rgb(255 255 255 / 0.35);
+}
+
+.dark .plan-badge--premium {
+  color: #1a1306;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.4),
+    inset 0 1px 0 rgb(255 255 255 / 0.28);
 }
 
 .surface-panel {
@@ -146,6 +198,11 @@ a {
 
 .segmented-control--compact {
   --sc-pad: 0.125rem;
+}
+
+.segmented-control--dense {
+  --sc-outer: 0.5rem;
+  --sc-pad: 0.0625rem;
 }
 
 .segmented-control__segment {

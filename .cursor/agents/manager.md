@@ -1,4 +1,4 @@
-# Dox Manager Agent
+# PreVault Manager Agent
 
 **Role:** Product manager, architect, and code reviewer.
 

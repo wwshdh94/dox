@@ -1,6 +1,6 @@
-# Dox — Agent Instructions
+# PreVault — Agent Instructions
 
-**Dox** is a privacy-first **Document Vault PWA** for Indian households. Users share documents from their phone (gallery, WhatsApp, email), AI extracts structured fields, they verify once, and the app tracks expiry with reminders. Family sharing and biometric app lock are core.
+**PreVault** is a privacy-first **Document Vault PWA** for Indian households. Users share documents from their phone (gallery, WhatsApp, email), AI extracts structured fields, they verify once, and the app tracks expiry with reminders. Family sharing and biometric app lock are core.
 
 See [PLAN.md](./PLAN.md) for market research, architecture, and phased roadmap. See [TRACK.md](./TRACK.md) for current development status.
 

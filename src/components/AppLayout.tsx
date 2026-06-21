@@ -24,6 +24,9 @@ export function AppLayout() {
     location.pathname.startsWith('/v/') ||
     location.pathname.startsWith('/p/');
 
+  const biometricLockEnabled = useVaultStore((s) => s.settings.biometricLockEnabled);
+  const locked = useVaultStore((s) => s.locked);
+
   debug('AppLayout', 'render', {
     hydrated,
     path: location.pathname,
@@ -34,7 +37,7 @@ export function AppLayout() {
   if (!hydrated) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
-        <LoadingScreen label="Loading Dox…" />
+        <LoadingScreen label="Loading PreVault…" />
       </div>
     );
   }
@@ -47,6 +50,16 @@ export function AppLayout() {
   if (user && !onboardingComplete && location.pathname !== '/onboarding') {
     debug('AppLayout', 'redirect → /onboarding');
     return <Navigate to="/onboarding" replace />;
+  }
+
+  if (
+    user &&
+    biometricLockEnabled &&
+    locked &&
+    location.pathname !== '/lock' &&
+    !isPublic
+  ) {
+    return <Navigate to="/lock" replace />;
   }
 
   if (user && location.pathname === '/login') {

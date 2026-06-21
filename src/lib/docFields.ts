@@ -104,6 +104,32 @@ export function fieldLabelFor(docType: DocType, key: string): string {
   return fieldSchemaFor(docType).find((f) => f.key === key)?.label ?? key;
 }
 
+/** Primary identifier shown on home document pills (masked until revealed). */
+const PRIMARY_REVEAL_FIELD: Partial<Record<DocType, string>> = {
+  passport: 'passportNumber',
+  pan: 'panNumber',
+  aadhaar: 'aadhaarNumber',
+  vehicle_rc: 'registrationNumber',
+  vehicle_puc: 'registrationNumber',
+  vehicle_insurance: 'policyNumber',
+  insurance: 'policyNumber',
+  health_insurance: 'policyNumber',
+};
+
+export function primaryRevealField(docType: DocType): string | undefined {
+  return PRIMARY_REVEAL_FIELD[docType];
+}
+
+export function primaryRevealValue(
+  docType: DocType,
+  fields: Record<string, string>,
+): string | undefined {
+  const key = primaryRevealField(docType);
+  if (!key) return undefined;
+  const value = fields[key];
+  return value ? String(value) : undefined;
+}
+
 /** Keep only schema keys; coerce values to strings for form state. */
 export function normalizeDocFields(
   docType: DocType,

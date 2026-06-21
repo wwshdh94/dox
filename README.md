@@ -1,4 +1,4 @@
-# Dox — Document Vault PWA
+# PreVault — Document Vault PWA
 
 Privacy-first family document vault for India.
 

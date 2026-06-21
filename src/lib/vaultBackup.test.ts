@@ -32,7 +32,7 @@ describe('vaultBackup', () => {
   it('encrypts and decrypts vault payload', async () => {
     const backup = await encryptVaultBackup(samplePayload, 'test-passphrase-123');
     expect(backup.version).toBe(BACKUP_VERSION);
-    expect(backup.app).toBe('dox');
+    expect(backup.app).toBe('prevault');
 
     const restored = await decryptVaultBackup(backup, 'test-passphrase-123');
     expect(restored.documents[0]?.title).toBe('Passport');
@@ -44,8 +44,15 @@ describe('vaultBackup', () => {
     await expect(decryptVaultBackup(backup, 'wrong-pass')).rejects.toThrow();
   });
 
+  it('decrypts legacy dox backup files', async () => {
+    const backup = await encryptVaultBackup(samplePayload, 'legacy-pass');
+    const legacy = { ...backup, app: 'dox' as const };
+    const restored = await decryptVaultBackup(legacy, 'legacy-pass');
+    expect(restored.documents[0]?.title).toBe('Passport');
+  });
+
   it('parses backup json', () => {
-    const json = JSON.stringify({ version: 1, app: 'dox', createdAt: '', salt: 'a', iv: 'b', ciphertext: 'c' });
-    expect(parseBackupJson(json).app).toBe('dox');
+    const json = JSON.stringify({ version: 1, app: 'prevault', createdAt: '', salt: 'a', iv: 'b', ciphertext: 'c' });
+    expect(parseBackupJson(json).app).toBe('prevault');
   });
 });

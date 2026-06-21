@@ -30,7 +30,7 @@ export function ReferralsPage() {
     if (channel === 'whatsapp') {
       window.open(whatsAppShareUrl(message), '_blank', 'noopener,noreferrer');
     } else if (channel === 'email') {
-      window.location.href = mailtoShareUrl('Join me on Dox', message);
+      window.location.href = mailtoShareUrl('Join me on PreVault', message);
     } else {
       void navigator.clipboard.writeText(`${message}\n\n${url}`);
     }
@@ -41,7 +41,7 @@ export function ReferralsPage() {
       <Header title="Referrals" backFallback="/profile" />
       <main className="page-main animate-fade-up space-y-5">
         <p className="text-sm text-muted">
-          Invite friends and family to Dox. When someone joins with your link and starts using their
+          Invite friends and family to PreVault. When someone joins with your link and starts using their
           vault, you earn <strong className="text-text">{REFERRAL_BONUS_DOCS} extra document uploads</strong>{' '}
           on the free plan.
         </p>
@@ -77,7 +77,7 @@ export function ReferralsPage() {
 
         {user.plan !== 'free' && (
           <p className="text-sm text-muted">
-            You&apos;re on {user.plan} — unlimited uploads. Referrals still help friends join Dox.
+            You&apos;re on {user.plan} — unlimited uploads. Referrals still help friends join PreVault.
           </p>
         )}
 

@@ -76,7 +76,7 @@ export function AdminDashboardPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dox-platform-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `prevault-platform-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };

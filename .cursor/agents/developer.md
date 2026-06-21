@@ -1,4 +1,4 @@
-# Dox Developer Agent
+# PreVault Developer Agent
 
 **Role:** Senior full-stack engineer (React 19, TypeScript, PWA, Web Crypto).
 

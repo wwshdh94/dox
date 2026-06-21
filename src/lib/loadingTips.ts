@@ -8,7 +8,7 @@ export const LOADING_TIPS = [
   'Encrypted backup — restore your vault anytime from Profile.',
 ] as const;
 
-const LAST_TIP_KEY = 'dox-last-loading-tip';
+const LAST_TIP_KEY = 'prevault-last-loading-tip';
 
 /** Pick a tip different from the last one shown (persisted per device). */
 export function nextLoadingTip(): string {

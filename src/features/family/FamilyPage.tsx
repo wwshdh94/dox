@@ -5,16 +5,26 @@ import { ExpiringBanner, ExpiryChip } from '@/components/ExpiryChip';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
-import { Input } from '@/components/Input';
 import { getExpiringDocuments, useVaultStore } from '@/store/useVaultStore';
 import { daysUntil } from '@/lib/format';
 import { memberAvatarGradient } from '@/lib/avatar';
 import { docsForMemberByDomain, isHealthDomainDoc } from '@/lib/docTags';
+import { formatMemberDocStats, memberFamilyDocStats } from '@/lib/memberStats';
 import { getOwnerMember, getOtherFamilyMembers } from '@/lib/family';
 import { memberHasJoined, memberLastActiveLabel } from '@/lib/memberActivity';
 import { MemberVaultPanel } from '@/features/family/MemberVaultPanel';
 import { PendingVerificationBanner } from '@/components/PendingVerificationBanner';
 import { debug } from '@/lib/debug';
+
+const EXPIRING_BANNER_DISMISS_KEY = 'prevault-expiring-banner-dismissed-count';
+
+function readBannerDismissed(count: number): boolean {
+  try {
+    return localStorage.getItem(EXPIRING_BANNER_DISMISS_KEY) === String(count);
+  } catch {
+    return false;
+  }
+}
 
 export function FamilyPage() {
   const allMembers = useVaultStore((s) => s.members);
@@ -27,6 +37,7 @@ export function FamilyPage() {
   const owner = useMemo(() => getOwnerMember(members), [members]);
   const otherMembers = useMemo(() => getOtherFamilyMembers(members), [members]);
   const [search, setSearch] = useState('');
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const navigate = useNavigate();
 
   const searchResults = useMemo(() => {
@@ -61,29 +72,44 @@ export function FamilyPage() {
   }, [documents, familyHomeView, owner]);
 
   useEffect(() => {
+    setBannerDismissed(readBannerDismissed(expiringDocs.length));
+  }, [expiringDocs.length]);
+
+  const dismissExpiringBanner = () => {
+    setBannerDismissed(true);
+    try {
+      localStorage.setItem(EXPIRING_BANNER_DISMISS_KEY, String(expiringDocs.length));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  useEffect(() => {
     debug('FamilyPage', 'mounted', { members: members.length, documents: documents.length, view: familyHomeView });
   }, [members.length, documents.length, familyHomeView]);
 
   const memberStats = otherMembers.map((m) => {
+    const stats = memberFamilyDocStats(documents, m.id);
     const familyDocs = docsForMemberByDomain(documents, m.id, 'family');
-    const healthCount = docsForMemberByDomain(documents, m.id, 'health').length;
     const nearest = familyDocs
       .filter((d) => d.expiryDate && !d.renewedAt)
       .sort((a, b) => daysUntil(a.expiryDate!) - daysUntil(b.expiryDate!))[0];
-    return { member: m, count: familyDocs.length, healthCount, nearest };
+    return { member: m, stats, nearest };
   });
+
+  const ownerStats = owner ? memberFamilyDocStats(documents, owner.id) : null;
 
   return (
     <div className="min-h-full pb-28">
       <Header />
       <main className="page-main animate-fade-up space-y-5">
-        <Input
-          label="Search"
+        <input
           type="search"
-          placeholder="Passport, PAN, insurance…"
+          placeholder="Search passport, PAN, insurance…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search documents"
+          className="min-h-11 w-full rounded-2xl border border-border bg-surface-elevated px-4 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-muted/60 focus:border-accent focus:ring-2 focus:ring-accent-soft"
         />
 
         {searching ? (
@@ -114,16 +140,18 @@ export function FamilyPage() {
         ) : (
           <>
         <PendingVerificationBanner />
-        <ExpiringBanner count={expiringDocs.length} onClick={() => navigate('/expiring')} />
+        {!bannerDismissed && (
+          <ExpiringBanner
+            count={expiringDocs.length}
+            onClick={() => navigate('/expiring')}
+            onDismiss={dismissExpiringBanner}
+          />
+        )}
 
         {familyHomeView === 'me' ? (
           owner ? (
             <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => navigate(`/family/${owner.id}`)}
-                className="flex w-full items-center gap-3.5 rounded-2xl text-left transition-colors hover:bg-accent-soft/30"
-              >
+              <div className="flex w-full items-center gap-3.5 rounded-2xl">
                 <div
                   className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${memberAvatarGradient(owner.displayName)} text-lg font-semibold text-white shadow-sm`}
                 >
@@ -135,9 +163,11 @@ export function FamilyPage() {
                 </div>
                 <div>
                   <p className="font-semibold tracking-tight">{owner.displayName}</p>
-                  <p className="text-xs text-accent-ink">My documents</p>
+                  {ownerStats && (
+                    <p className="text-xs text-muted">{formatMemberDocStats(ownerStats.total, ownerStats.expiring)}</p>
+                  )}
                 </div>
-              </button>
+              </div>
               <MemberVaultPanel memberId={owner.id} showRelationship={false} />
             </div>
           ) : (
@@ -159,7 +189,7 @@ export function FamilyPage() {
                 </Link>
               </p>
             )}
-            {memberStats.map(({ member, count, healthCount, nearest }) => (
+            {memberStats.map(({ member, stats, nearest }) => (
               <Card key={member.id} onClick={() => navigate(`/family/${member.id}`)}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3.5">
@@ -171,8 +201,7 @@ export function FamilyPage() {
                     <div>
                       <p className="font-semibold tracking-tight">{member.displayName}</p>
                       <p className="text-xs text-muted">
-                        {member.relationship} · {count} doc{count === 1 ? '' : 's'}
-                        {healthCount > 0 && ` · ${healthCount} in Health`}
+                        {member.relationship} · {formatMemberDocStats(stats.total, stats.expiring)}
                       </p>
                       {memberHasJoined(member) ? (
                         <p className="text-xs text-accent-ink">{memberLastActiveLabel(member)}</p>

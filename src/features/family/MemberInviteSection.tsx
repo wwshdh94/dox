@@ -27,7 +27,7 @@ export function MemberInviteSection({ member }: { member: FamilyMember }) {
     } else if (channel === 'email') {
       const to = member.email ? member.email : '';
       window.location.href = mailtoShareUrl(
-        `${user.name} invited you to Dox`,
+        `${user.name} invited you to PreVault`,
         to ? `To: ${to}\n\n${message}` : message,
       );
     } else {
@@ -75,7 +75,7 @@ export function MemberInviteSection({ member }: { member: FamilyMember }) {
 
       {member.role !== 'owner' && !joined && member.status !== 'disabled' && (
         <div className="space-y-2 border-t border-border-soft pt-4">
-          <p className="section-label">Invite to Dox</p>
+          <p className="section-label">Invite to PreVault</p>
           <p className="text-xs text-muted">
             Share an app invite so {member.displayName.split(' ')[0]} can join your family vault.
           </p>

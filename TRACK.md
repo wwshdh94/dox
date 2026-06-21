@@ -1,4 +1,4 @@
-# Dox — Development Track
+# PreVault — Development Track
 
 **Last updated:** 2026-06-21
 
@@ -34,9 +34,9 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] Back navigation on all sub-pages via Header ← button + smart route fallbacks
 - [x] **Document tags** — domain (family/health/assets) + category; tab-scoped filtering
 - [x] **Family tab Me | Family toggle** — Me shows owner vault inline; Family shows other members
-- [x] **Dox logo** — nameless geometric abstract mark (`Logo` component, `public/logo.svg`, favicon)
+- [x] **PreVault logo** — nameless geometric abstract mark (`Logo` component, `public/logo.svg`, favicon)
 - [x] **Shared bundles** — FAB entry, save bundles, temp share links (`/p/:token`), activity log, print view with anti-crop watermark
-- [x] **Backup & restore** — encrypted `.doxbackup` file + Google Drive upload/restore (`/profile/backup`)
+- [x] **Backup & restore** — encrypted `.prevaultbackup` file + Google Drive upload/restore (`/profile/backup`)
 - [x] **Member profiles** — phone, email, photo; invite to app (WhatsApp / email / copy link)
 - [x] **Referrals** — free tier +3 uploads per referral (5 qualifying uploads), cap 15 bonus docs in logic; UI shows positive invite messaging only, limits in fine print (`/profile/referrals`)
 - [x] **Free vs Pro limits** — `src/lib/planLimits.ts`: 10 verified docs, +2 family members, 3 assets, 1 bundle, 2 temp links; Pro unlocks unlimited + cloud AI, email reminders, visiting card, Drive backup (`/profile/plan`)
@@ -47,6 +47,12 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Document field schemas** — fixed extracted fields per `DocType` in `src/lib/docFields.ts`; OCR/upload strip extras; notes for additional data; passport/PUC/insurance expiry fields; invoice warranty flow
 - [x] **Share UX overhaul** — document share modals (WhatsApp/email/temp URL), transparent overlay, dimmed backdrop
 - [x] **Profile Activity & shares** — `/profile/activity`: Active URLs filter, share activity + full log, creator attribution, auto-purge expired links, plan retention (30d/1y)
+- [x] **Upload/camera defer UI** — FAB upload & scan open native picker/camera immediately; form shown only after file selected; cancel returns to previous tab
+- [x] **Family home layout** — inline search placeholder, dismissible expiring banner, document pills with per-field Reveal/Hide (replaces Quick copy)
+- [x] **Member doc stats** — home cards show total documents + due-soon count; health record pill removed from member vault panel
+- [x] **Mobile typography** — `.page-main` uses smaller body text on phones; header + bottom nav unchanged
+- [x] **Settings split** — Profile → **Appearance** (theme) vs **Account & reminders** (push/email, AI extraction, recovery code)
+- [x] **Document pill icons** — flat lightweight PNGs in `public/icons/docs/` (~39KB total); title-keyword fallback for `other` docs (Bill, Card, Invoice, etc.); generator at `scripts/generate_doc_icons.py`
 
 ## In progress
 
@@ -79,14 +85,14 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 ## Test results
 
 ```
-npm test  — 56/56 pass
+npm test  — 66/66 pass
 npm run build — success (PWA SW generated)
 ```
 
 ## Run
 
 ```bash
-cd /Users/shdh94/projects/Dox
+cd /Users/shdh94/projects/PreVault
 npm install
 npm run dev
 ```

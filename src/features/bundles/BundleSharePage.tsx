@@ -70,7 +70,7 @@ export function BundleSharePage() {
       {!printMode && (
         <div className="no-print mb-4 space-y-2">
           <p className="text-xs text-warning">
-            Shared via Dox · Expires {new Date(link.expiresAt).toLocaleString()} · View & print only
+            Shared via PreVault · Expires {new Date(link.expiresAt).toLocaleString()} · View & print only
           </p>
           <Button className="w-full" onClick={handlePrint}>
             Print bundle
@@ -90,7 +90,7 @@ export function BundleSharePage() {
         <div className="space-y-4">
           <div className="text-center print:mb-6">
             <p className="font-display text-xl text-text">Document bundle</p>
-            <p className="text-sm text-muted">From {user?.name ?? 'Dox user'}</p>
+            <p className="text-sm text-muted">From {user?.name ?? 'PreVault user'}</p>
           </div>
 
           {bundleDocs.map((doc) => {

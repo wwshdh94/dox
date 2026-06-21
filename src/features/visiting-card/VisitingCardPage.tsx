@@ -124,7 +124,7 @@ export function PublicCardPage({ slug }: { slug: string }) {
       >
         Add to Contacts
       </a>
-      <p className="text-center text-xs text-muted">Shared via Dox</p>
+      <p className="text-center text-xs text-muted">Shared via PreVault</p>
     </div>
   );
 }

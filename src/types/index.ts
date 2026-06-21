@@ -73,7 +73,7 @@ export interface FamilyMember {
   healthSummary?: HealthSummary;
   /** Token for app invite link */
   inviteToken?: string;
-  /** When the member joined the Dox app (accepted invite / signed in) */
+  /** When the member joined the PreVault app (accepted invite / signed in) */
   joinedAt?: string;
   /** Last time this member was active in the app */
   lastActiveAt?: string;
@@ -233,6 +233,9 @@ export interface AppSettings {
   emailReminders: boolean;
   cloudAiEnabled: boolean;
   privacyMode: boolean;
+  /** Unlock app with device biometrics (WebAuthn) on open */
+  biometricLockEnabled?: boolean;
+  /** @deprecated Replaced by biometricLockEnabled */
   lockPin?: string;
   recoveryCode?: string;
   onboardingComplete: boolean;

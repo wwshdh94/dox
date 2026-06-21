@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
@@ -102,7 +102,11 @@ export function UploadPage() {
   const [category, setCategory] = useState<DocCategory>('identity');
   const [editAssetId, setEditAssetId] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const backTo = isEdit ? `/documents/${editId}` : uploadBackPath(params);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const pickerResolvedRef = useRef(false);
   const verifiedCount = countVerifiedDocuments(documents);
   const uploadsLeft = user ? remainingUploads(user, verifiedCount) : null;
   const assetSlotsLeft = user ? remainingAssetSlots(user, assets.length) : null;
@@ -173,6 +177,70 @@ export function UploadPage() {
     setExpiryDate('');
     setWarrantyDuration('');
   }, [isPurchase, underWarranty]);
+
+  const goBackFromPicker = () => {
+    if (location.key !== 'default') {
+      navigate(-1);
+    } else {
+      navigate(backTo);
+    }
+  };
+
+  const handleInitialPick = (picked: File | null) => {
+    if (pickerResolvedRef.current) return;
+    pickerResolvedRef.current = true;
+    if (!picked) {
+      goBackFromPicker();
+      return;
+    }
+    setFile(picked);
+    setExtractMode('on_device');
+    setTitle(picked.name.replace(/\.[^.]+$/, ''));
+  };
+
+  const openFilePicker = () => {
+    const input = isCamera ? cameraInputRef.current : fileInputRef.current;
+    input?.click();
+  };
+
+  const awaitingFile = step === 'pick' && !params.get('verify') && !isEdit && !file;
+
+  useEffect(() => {
+    if (!awaitingFile) return;
+
+    pickerResolvedRef.current = false;
+    const input = isCamera ? cameraInputRef.current : fileInputRef.current;
+    if (!input) return;
+
+    const onChange = () => handleInitialPick(input.files?.[0] ?? null);
+    const onCancel = () => handleInitialPick(null);
+
+    const onWindowBlur = () => {
+      const onWindowFocus = () => {
+        window.setTimeout(() => {
+          if (!pickerResolvedRef.current && !input.files?.[0]) {
+            handleInitialPick(null);
+          }
+        }, 400);
+      };
+      window.addEventListener('focus', onWindowFocus, { once: true });
+    };
+
+    input.addEventListener('change', onChange);
+    input.addEventListener('cancel', onCancel);
+
+    const timer = window.setTimeout(() => {
+      window.addEventListener('blur', onWindowBlur, { once: true });
+      input.click();
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      input.removeEventListener('change', onChange);
+      input.removeEventListener('cancel', onCancel);
+      window.removeEventListener('blur', onWindowBlur);
+    };
+  }, [awaitingFile, isCamera, backTo, location.key]);
 
   const stageForVerification = async (initialFields: Record<string, string>, docTitle: string) => {
     setLimitError('');
@@ -512,45 +580,60 @@ export function UploadPage() {
         )}
         {step === 'pick' && !params.get('verify') && (
           <>
-            {isCamera ? (
-              <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-accent/35 bg-accent-soft/50 p-6 text-center text-sm shadow-sm">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    const picked = e.target.files?.[0] ?? null;
-                    setFile(picked);
-                    if (picked) {
-                      setExtractMode('on_device');
-                      setTitle(picked.name.replace(/\.[^.]+$/, ''));
-                    }
-                  }}
-                />
-                <span className="text-4xl">📷</span>
-                <p className="mt-3 font-medium text-text">
-                  {file ? file.name : 'Tap to open camera'}
-                </p>
-                <p className="mt-1 text-xs text-muted">Take a photo of your document</p>
-              </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const picked = e.target.files?.[0] ?? null;
+                if (awaitingFile) handleInitialPick(picked);
+                else if (picked) {
+                  setFile(picked);
+                  setTitle(picked.name.replace(/\.[^.]+$/, ''));
+                }
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const picked = e.target.files?.[0] ?? null;
+                if (awaitingFile) handleInitialPick(picked);
+                else if (picked) {
+                  setFile(picked);
+                  setTitle(picked.name.replace(/\.[^.]+$/, ''));
+                }
+                e.target.value = '';
+              }}
+            />
+
+            {awaitingFile ? (
+              <p className="py-12 text-center text-sm text-muted">
+                {isCamera ? 'Opening camera…' : 'Opening file picker…'}
+              </p>
             ) : (
-              <label className="surface-panel flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-dashed border-border p-6 text-sm text-muted">
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-                {file ? file.name : 'Tap to choose photo or PDF'}
-              </label>
-            )}
+              <>
+                <button
+                  type="button"
+                  onClick={openFilePicker}
+                  className="surface-panel flex min-h-20 w-full cursor-pointer flex-col items-center justify-center border-2 border-dashed border-border p-4 text-center text-sm"
+                >
+                  <p className="font-medium text-text">{file?.name}</p>
+                  <p className="mt-1 text-xs text-muted">Tap to choose a different file</p>
+                </button>
 
             {!isCamera && (
               <Button
                 variant="ghost"
                 className="w-full text-xs"
                 onClick={() => {
+                  pickerResolvedRef.current = false;
+                  setFile(null);
                   const next = new URLSearchParams(params);
                   next.set('source', 'camera');
                   navigate(`/upload?${next.toString()}`);
@@ -619,6 +702,8 @@ export function UploadPage() {
             >
               Store only (manual entry)
             </Button>
+              </>
+            )}
           </>
         )}
 

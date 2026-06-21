@@ -24,7 +24,7 @@ export function TempSharePage() {
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-6">
-      <p className="text-xs text-warning">Shared via Dox — expires soon · ID fields redacted</p>
+      <p className="text-xs text-warning">Shared via PreVault — expires soon · ID fields redacted</p>
       <div className="surface-panel p-4">
         <p className="font-medium">{doc.title}</p>
         {Object.entries(doc.fields).map(([k, v]) => (

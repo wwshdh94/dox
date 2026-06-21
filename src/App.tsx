@@ -14,6 +14,7 @@ import { MemberHealthPage } from '@/features/health/MemberHealthPage';
 import { DocumentDetailPage } from '@/features/documents/DocumentDetailPage';
 import { UploadPage } from '@/features/documents/UploadPage';
 import { SettingsPage } from '@/features/security/SettingsPage';
+import { AppearanceSettingsPage } from '@/features/security/AppearanceSettingsPage';
 import { SecurityPage } from '@/features/security/SecurityPage';
 import { LockPage } from '@/features/security/LockPage';
 import { VisitingCardPage, PublicCardPage } from '@/features/visiting-card/VisitingCardPage';
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/family" element={<FamilyManagementPage />} />
+          <Route path="/profile/appearance" element={<AppearanceSettingsPage />} />
           <Route path="/profile/settings" element={<SettingsPage />} />
           <Route path="/profile/security" element={<SecurityPage />} />
           <Route path="/profile/activity" element={<ActivityLogPage />} />

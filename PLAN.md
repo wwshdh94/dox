@@ -1,8 +1,8 @@
-# Dox — Document Vault PWA Plan
+# PreVault — Document Vault PWA Plan
 
 ## Vision
 
-A mobile-first PWA where Indian families store critical documents, get AI-assisted data entry, verify once, and never miss a renewal. Upload via **Share to Dox** from any app on the phone.
+A mobile-first PWA where Indian families store critical documents, get AI-assisted data entry, verify once, and never miss a renewal. Upload via **Share to PreVault** from any app on the phone.
 
 ---
 
@@ -42,7 +42,7 @@ A mobile-first PWA where Indian families store critical documents, get AI-assist
 
 ### Positioning
 
-> **Dox** — Share any document. AI fills the details. You verify once. Never miss an expiry.
+> **PreVault** — Share any document. AI fills the details. You verify once. Never miss an expiry.
 
 Privacy-first, India-first templates, family-ready. Not a DigiLocker replacement — a **household expiry-aware vault**.
 
@@ -56,7 +56,7 @@ Privacy-first, India-first templates, family-ready. Not a DigiLocker replacement
 
 ```text
 ┌─────────────────────────────────────┐
-│  Dox                    [Avatar]    │  ← Profile → Settings live here
+│  PreVault                    [Avatar]    │  ← Profile → Settings live here
 ├─────────────────────────────────────┤
 │  ⚠ 2 expiring this month  (banner)  │  ← tap → filtered expiry list
 ├─────────────────────────────────────┤
@@ -117,7 +117,7 @@ Documents and records **not tied to identity docs** — vehicles, property, **pu
 | **Reminders** | Push + **email** toggles; default offsets (90/30/7) |
 | **Security** | Security Center, app lock, active sessions, activity log |
 | **Privacy** | Download data, delete account, grievance |
-| **Help** | Install guide, Share-to-Dox tutorial, recovery code |
+| **Help** | Install guide, Share to PreVault tutorial, recovery code |
 
 No third tab for Settings — keeps bottom nav to two items only.
 
@@ -126,7 +126,7 @@ No third tab for Settings — keeps bottom nav to two items only.
 1. Google sign-in + ToS/Privacy
 2. Security onboarding (3 bullets)
 3. **Install PWA** prompt (Android) / Add to Home Screen (iOS)
-4. **Share tutorial** — "Try sharing an image to Dox" with demo animation
+4. **Share tutorial** — "Try sharing an image to PreVault" with demo animation
 5. Add first family member (self) → optional first upload
 6. Optional: generate **recovery code** (store offline)
 
@@ -235,7 +235,7 @@ Build **simple defaults**; hide power features behind "More options."
 - [ ] **Notes** per document (free text)
 - [ ] **Mark as renewed** — dismiss reminder; optional re-upload
 - [ ] **Recovery code** — optional vault recovery at setup
-- [ ] **Onboarding** — install PWA + Share-to-Dox tutorial
+- [ ] **Onboarding** — install PWA + Share to PreVault tutorial
 
 ### Should-have (v1)
 
@@ -301,7 +301,7 @@ flowchart TB
 
 ### Share Target flow (Android)
 
-1. User shares PDF/image from WhatsApp/Gallery → selects **Dox** (installed PWA).
+1. User shares PDF/image from WhatsApp/Gallery → selects **PreVault** (installed PWA).
 2. OS POSTs `multipart/form-data` to `/share-target`.
 3. Service worker intercepts, stores file in Cache/IndexedDB, redirects to `/import?ref=...`.
 4. App page loads file → **upload options screen** (AI on/off) → extraction or store-only → verify UI if AI used.
@@ -361,7 +361,7 @@ Before processing, user sees an **upload options** screen:
 | Passport, Aadhaar, PAN | Poor on-device for Indian formats | **Yes** if you promise auto-fill |
 | User stores file only | N/A | **No** |
 
-**For Dox's wedge:** Share + **expiry reminders** does not require AI. AI reduces typing — it is not the core loop.
+**For PreVault's wedge:** Share + **expiry reminders** does not require AI. AI reduces typing — it is not the core loop.
 
 #### Default behaviour (recommended)
 
@@ -468,7 +468,7 @@ Purchase asset: "MacBook Pro 14"
 
 #### User flow
 
-1. Share invoice photo from gallery → Dox → assign **Purchase** asset (new or existing).
+1. Share invoice photo from gallery → PreVault → assign **Purchase** asset (new or existing).
 2. AI on → extracts amount, date, store, product; user verifies.
 3. Optionally tag **owned by** family member (e.g. Rahul's laptop).
 4. Add warranty PDF later → attach to same purchase card.
@@ -524,7 +524,7 @@ Purchase appears under **Assets tab** and on **Family member** profile when `own
 
 ### Authentication — Google Sign-In
 
-Primary auth: **Google OAuth** via Supabase Auth. Google verifies identity; Dox stores only `sub`, email, name, avatar URL.
+Primary auth: **Google OAuth** via Supabase Auth. Google verifies identity; PreVault stores only `sub`, email, name, avatar URL.
 
 ```mermaid
 sequenceDiagram
@@ -567,7 +567,7 @@ Users add family **without requiring them to upload docs first**. Two paths:
 ```
 Household
   ├── owner_user_id (Google auth)
-  ├── FamilyMember (profile — may or may not have Dox account)
+  ├── FamilyMember (profile — may or may not have PreVault account)
   │     ├── display_name, email, phone_e164
   │     ├── relationship, date_of_birth (optional)
   │     ├── linked_user_id (null until invite accepted)
@@ -578,7 +578,7 @@ Household
 
 **Invite flow:**
 1. Owner adds member (name + email or phone).
-2. Dox sends invite email/SMS: "Join [Household] on Dox."
+2. PreVault sends invite email/SMS: "Join [Household] on PreVault."
 3. Recipient signs in with Google → auto-links `linked_user_id`.
 4. RLS grants access to shared documents only.
 
@@ -682,12 +682,12 @@ TempShareLink
   └── payload_ref (encrypted blob or pre-rendered redacted asset)
 ```
 
-**Recipient URL:** `https://dox.app/v/{token}` — no Dox account required.
+**Recipient URL:** `https://prevault.app/v/{token}` — no PreVault account required.
 
 **Security controls:**
 - Token is unguessable (128-bit entropy); only hash stored server-side
 - HTTPS only; `Referrer-Policy: no-referrer`
-- Watermark overlay: "Shared by [Name] via Dox — expires [time]"
+- Watermark overlay: "Shared by [Name] via PreVault — expires [time]"
 - Owner can **revoke link** anytime from document detail → "Active links"
 - Max **3 active links per document** (Free), **10** (Pro)
 - Rate limit: 10 views/min per token
@@ -721,11 +721,11 @@ Google auth restores **account** access; recovery code restores **vault** access
 
 ## Digital Visiting Card (professionals)
 
-Optional feature for **doctors, consultants, lawyers, CA, real-estate agents** — a digital business card inside Dox, under Profile (not a third tab).
+Optional feature for **doctors, consultants, lawyers, CA, real-estate agents** — a digital business card inside PreVault, under Profile (not a third tab).
 
 ### Platform reality — proximity sharing
 
-| Method | iPhone | Android PWA | Available to Dox? |
+| Method | iPhone | Android PWA | Available to PreVault? |
 |--------|--------|-------------|-------------------|
 | **NameDrop / AirDrop** (hold phones together) | Native only | N/A | **No** — not exposed to web apps |
 | **QR code** (one shows, other scans) | Camera app | Camera / in-app scanner | **Yes** — primary method |
@@ -752,21 +752,21 @@ Templates: **Doctor** | **Business** | **Custom**
 ### User flows
 
 1. **Enable** — Profile → "My Visiting Card" → fill fields → publish.
-2. **Show nearby** — fullscreen QR → `https://dox.app/c/{slug}`; brightness boost.
+2. **Show nearby** — fullscreen QR → `https://prevault.app/c/{slug}`; brightness boost.
 3. **Scan card** — camera QR → preview → save to phone contacts (vCard).
 4. **Share** — `navigator.share()` or download `.vcf`.
 5. **NFC (Android)** — write URL to NTAG sticker; tap-to-open for recipients.
 
 ### Public page
 
-- `https://dox.app/c/{slug}` — no install required
+- `https://prevault.app/c/{slug}` — no install required
 - **Add to Contacts** → vCard 3.0 download
 - Optional PIN (Pro); `noindex` for unlisted cards
 - Separate DPDP consent at card setup
 
 ### Monetization
 
-- **Pro:** 1 card, custom slug, no Dox branding, view count
+- **Pro:** 1 card, custom slug, no PreVault branding, view count
 - **Free:** not included (or basic card with branding)
 
 ### Phase 6 — post-beta (~1 week)
@@ -781,7 +781,7 @@ Card editor, public page, QR show/scan, vCard share, Android Web NFC write.
 
 | Component | Technology |
 |-----------|------------|
-| Monorepo | Single repo `dox/` |
+| Monorepo | Single repo `prevault/` |
 | Frontend | React 19, TypeScript, Vite 6, Tailwind, shadcn/ui |
 | Design | CSS variables; **light/dark/system**; muted sage accent palette |
 | PWA | vite-plugin-pwa, Workbox |
@@ -869,23 +869,23 @@ Settings → Security Center → Recent activity: aggregated view of document ev
 
 ## Compliance — Indian IT Act & data protection
 
-Dox is a **Data Fiduciary** under the **Digital Personal Data Protection Act, 2023** (DPDPA). Legacy **IT Act, 2000** and **SPDI Rules, 2011** still apply in parallel until fully superseded.
+PreVault is a **Data Fiduciary** under the **Digital Personal Data Protection Act, 2023** (DPDPA). Legacy **IT Act, 2000** and **SPDI Rules, 2011** still apply in parallel until fully superseded.
 
 ### Applicable laws
 
-| Law | Relevance to Dox |
+| Law | Relevance to PreVault |
 |-----|------------------|
 | **DPDP Act 2023 + Rules 2025** | Primary framework — consent, notice, security, breach notification, erasure |
 | **IT Act 2000 §43A** | Compensation for failure to protect sensitive personal data |
 | **SPDI Rules 2011** | Defines sensitive personal data (passwords, financial, health, **biometric**) |
 | **Aadhaar Act 2016 + UIDAI regulations** | Restrictions on Aadhaar number storage, display, sharing |
-| **IT Rules 2021** (intermediaries) | Not applicable initially — Dox is not a social media intermediary |
+| **IT Rules 2021** (intermediaries) | Not applicable initially — PreVault is not a social media intermediary |
 
 **Compliance deadline:** Full DPDP operational compliance by **May 13, 2027** (18-month phase from Nov 2025). Build compliant from day one.
 
 ### DPDP Act — how we apply it
 
-| Obligation | Dox implementation |
+| Obligation | PreVault implementation |
 |------------|-------------------|
 | **Lawful purpose + consent** (§4–7) | Signup consent; purpose-limited processing (vault, reminders, family share) |
 | **Notice** (Rules 2025) | Standalone privacy policy; itemized data categories and purposes |
@@ -916,7 +916,7 @@ Document vaults handle **sensitive personal data**:
 
 ### Aadhaar-specific rules (critical)
 
-UIDAI regulations prohibit careless Aadhaar handling. Dox approach:
+UIDAI regulations prohibit careless Aadhaar handling. PreVault approach:
 
 | Rule | Implementation |
 |------|----------------|
@@ -1066,7 +1066,7 @@ Annual discount ~20%. 14-day trial on paid tiers.
 - **Notes** field on document detail
 - Document list + **delete document** with confirmation
 - **Document activity log** schema + upload/delete events
-- **Onboarding** — install + Share-to-Dox tutorial
+- **Onboarding** — install + Share to PreVault tutorial
 - **Exit criteria**: Share PDF from Android → assign to vehicle asset; duplicate warning works
 
 ### Phase 2 — AI extraction + verify (2 weeks)
@@ -1177,4 +1177,4 @@ Backlog — implement eventually or remove:
 - Apple Watch / Wear OS complication for next expiry
 - Integration with insurance aggregator APIs for policy sync
 - **NameDrop / AirDrop-style exchange** — requires native iOS/Android app (not PWA)
-- Visiting card: save scanned cards to Dox CRM / address book sync
+- Visiting card: save scanned cards to PreVault CRM / address book sync

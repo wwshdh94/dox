@@ -1,9 +1,9 @@
 interface SegmentedControlProps<T extends string> {
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; disabled?: boolean }[];
   value: T;
   onChange: (value: T) => void;
   className?: string;
-  size?: 'default' | 'compact';
+  size?: 'default' | 'compact' | 'dense';
   'aria-label'?: string;
 }
 
@@ -15,6 +15,10 @@ const sizeStyles = {
   compact: {
     track: 'segmented-control segmented-control--compact',
     button: 'py-1.5 text-xs',
+  },
+  dense: {
+    track: 'segmented-control segmented-control--compact segmented-control--dense',
+    button: 'px-1 py-1 text-[0.625rem] leading-tight',
   },
 } as const;
 
@@ -42,8 +46,13 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="tab"
             aria-selected={selected}
-            onClick={() => onChange(opt.value)}
+            disabled={opt.disabled}
+            onClick={() => {
+              if (!opt.disabled) onChange(opt.value);
+            }}
             className={`segmented-control__segment flex-1 px-2.5 font-semibold transition-colors ${styles.button} ${
+              opt.disabled ? 'cursor-not-allowed opacity-45' : ''
+            } ${
               selected
                 ? 'bg-accent text-accent-fg shadow-sm'
                 : 'text-muted hover:text-text'

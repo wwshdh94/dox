@@ -1,4 +1,4 @@
-# Dox Agentic Development Loop
+# PreVault Agentic Development Loop
 
 Three agents collaborate on every feature cycle:
 

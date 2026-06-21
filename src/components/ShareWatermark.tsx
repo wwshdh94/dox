@@ -11,7 +11,7 @@ export function ShareWatermark({
   sharedAt: string;
   sharedWith?: string;
 }) {
-  const line = `Dox · ${purpose} · ${formatShareDate(sharedAt)}${sharedWith ? ` · ${sharedWith}` : ''}`;
+  const line = `PreVault · ${purpose} · ${formatShareDate(sharedAt)}${sharedWith ? ` · ${sharedWith}` : ''}`;
 
   return (
     <>

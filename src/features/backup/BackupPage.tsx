@@ -190,7 +190,7 @@ export function BackupPage() {
         <section className="surface-panel space-y-3 p-4">
           <p className="section-label">Create backup</p>
           <p className="text-xs text-muted">
-            Choose a strong passphrase — Dox cannot recover it if you forget. Encrypted with
+            Choose a strong passphrase — PreVault cannot recover it if you forget. Encrypted with
             AES-256-GCM before upload or download.
           </p>
           <Input
@@ -208,7 +208,7 @@ export function BackupPage() {
             autoComplete="new-password"
           />
           <Button className="w-full" disabled={busy} onClick={() => void handleDownloadBackup()}>
-            Download backup file (.doxbackup)
+            Download backup file (.prevaultbackup)
           </Button>
           <Button
             variant="secondary"
@@ -236,7 +236,7 @@ export function BackupPage() {
           <input
             ref={fileRef}
             type="file"
-            accept=".doxbackup,application/json"
+            accept=".prevaultbackup,application/json"
             className="hidden"
             onChange={(e) => onFilePicked(e.target.files?.[0] ?? null)}
           />
@@ -266,7 +266,7 @@ export function BackupPage() {
       >
         <p className="mb-3 text-sm text-muted">
           {restoreMode === 'drive'
-            ? 'Downloads your latest Dox backup from Google Drive and restores it here.'
+            ? 'Downloads your latest PreVault backup from Google Drive and restores it here.'
             : pendingFile
               ? `File: ${pendingFile.name}`
               : 'Select a backup file.'}

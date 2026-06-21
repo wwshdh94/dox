@@ -34,7 +34,7 @@ function loadGoogleScript(): Promise<void> {
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-dox-gis]');
+    const existing = document.querySelector('script[data-prevault-gis]');
     if (existing) {
       existing.addEventListener('load', () => resolve());
       return;
@@ -43,7 +43,7 @@ function loadGoogleScript(): Promise<void> {
     s.src = 'https://accounts.google.com/gsi/client';
     s.async = true;
     s.defer = true;
-    s.dataset.doxGis = '1';
+    s.dataset.prevaultGis = '1';
     s.onload = () => resolve();
     s.onerror = () => reject(new Error('Failed to load Google Sign-In'));
     document.head.appendChild(s);
@@ -118,7 +118,7 @@ interface DriveFile {
 
 async function listBackupFiles(token: string): Promise<DriveFile[]> {
   const q = encodeURIComponent(
-    "name contains 'dox-vault-backup' and trashed=false and mimeType='application/json'",
+    "name contains 'prevault-vault-backup' and trashed=false and mimeType='application/json'",
   );
   const res = await driveFetch(
     token,
@@ -130,7 +130,7 @@ async function listBackupFiles(token: string): Promise<DriveFile[]> {
 
 export async function downloadLatestBackupFromDrive(token: string): Promise<EncryptedVaultBackup> {
   const files = await listBackupFiles(token);
-  if (files.length === 0) throw new Error('No Dox backup found in your Google Drive.');
+  if (files.length === 0) throw new Error('No PreVault backup found in your Google Drive.');
   const latest = files[0]!;
   const res = await driveFetch(
     token,

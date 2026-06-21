@@ -14,14 +14,14 @@ export interface BugReport {
   recentErrors: ReturnType<typeof getRecentErrors>;
 }
 
-const REPORTS_KEY = 'dox-bug-reports';
+const REPORTS_KEY = 'prevault-bug-reports';
 const MAX_REPORTS = 50;
-const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL ?? 'support@dox.app';
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL ?? 'support@prevault.app';
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '0.1.0';
 
 function readVaultUser(): { id?: string; email?: string } {
   try {
-    const raw = localStorage.getItem('dox-vault');
+    const raw = localStorage.getItem('prevault-vault');
     if (!raw) return {};
     const parsed = JSON.parse(raw) as { state?: { user?: { id?: string; email?: string } } };
     return parsed.state?.user ?? {};
@@ -49,7 +49,7 @@ export function createBugReport(error: Error, componentStack?: string | null): B
 
 export function formatBugReportBody(report: BugReport): string {
   return [
-    'Dox bug report',
+    'PreVault bug report',
     `Report ID: ${report.id}`,
     `Time: ${report.at}`,
     `App: ${report.appVersion}`,
@@ -87,7 +87,7 @@ export function listBugReports(): BugReport[] {
 }
 
 export function bugReportMailto(report: BugReport): string {
-  const subject = encodeURIComponent(`Dox bug report — ${report.id.slice(0, 8)}`);
+  const subject = encodeURIComponent(`PreVault bug report — ${report.id.slice(0, 8)}`);
   const body = encodeURIComponent(formatBugReportBody(report));
   return `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
 }

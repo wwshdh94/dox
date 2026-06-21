@@ -36,8 +36,8 @@ export class ErrorBoundary extends Component<Props, State> {
       result === 'mailto'
         ? 'Report saved locally. Your email app should open — send the message to complete the report.'
         : result === 'copied'
-          ? 'Report saved locally and copied to clipboard. Paste it into an email to support@dox.app.'
-          : 'Report saved locally. Email support@dox.app with what you were doing when this happened.';
+          ? 'Report saved locally and copied to clipboard. Paste it into an email to support@prevault.app.'
+          : 'Report saved locally. Email support@prevault.app with what you were doing when this happened.';
     this.setState({ reporting: false, reportNote });
   };
 

@@ -13,7 +13,7 @@ export const REFERRAL_MAX_BONUS_DOCS = 15;
 /** Uploads a referred user must complete to qualify their referrer. */
 export const REFERRAL_QUALIFYING_UPLOADS = 5;
 
-const LEDGER_KEY = 'dox-referral-ledger';
+const LEDGER_KEY = 'prevault-referral-ledger';
 
 export interface ReferralLedgerEntry {
   bonusDocsEarned: number;
@@ -106,12 +106,12 @@ export function grantReferralReward(
 }
 
 export function referralSignupUrl(code: string): string {
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://dox.app';
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://prevault.app';
   return `${base}/login?ref=${encodeURIComponent(code)}`;
 }
 
 export function memberInviteUrl(referralCode: string, memberName: string): string {
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://dox.app';
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://prevault.app';
   return `${base}/login?ref=${encodeURIComponent(referralCode)}&member=${encodeURIComponent(memberName)}`;
 }
 
@@ -125,7 +125,7 @@ export function mailtoShareUrl(subject: string, body: string): string {
 
 export function referralInviteMessage(userName: string, code: string): string {
   const url = referralSignupUrl(code);
-  return `${userName} invited you to Dox — a private family document vault with expiry reminders.\n\nSign up: ${url}\n\nReferral code: ${code}`;
+  return `${userName} invited you to PreVault — a private family document vault with expiry reminders.\n\nSign up: ${url}\n\nReferral code: ${code}`;
 }
 
 export function memberInviteMessage(
@@ -134,17 +134,17 @@ export function memberInviteMessage(
   code: string,
 ): string {
   const url = memberInviteUrl(code, memberName);
-  return `Hi ${memberName}, ${inviterName} invited you to join our family vault on Dox.\n\nSign up here: ${url}`;
+  return `Hi ${memberName}, ${inviterName} invited you to join our family vault on PreVault.\n\nSign up here: ${url}`;
 }
 
 /** Persist ref code from URL until sign-in completes. */
 export function stashPendingReferral(code: string | null): void {
-  if (code) sessionStorage.setItem('dox-pending-ref', code);
-  else sessionStorage.removeItem('dox-pending-ref');
+  if (code) sessionStorage.setItem('prevault-pending-ref', code);
+  else sessionStorage.removeItem('prevault-pending-ref');
 }
 
 export function consumePendingReferral(): string | undefined {
-  const code = sessionStorage.getItem('dox-pending-ref') ?? undefined;
-  sessionStorage.removeItem('dox-pending-ref');
+  const code = sessionStorage.getItem('prevault-pending-ref') ?? undefined;
+  sessionStorage.removeItem('prevault-pending-ref');
   return code;
 }

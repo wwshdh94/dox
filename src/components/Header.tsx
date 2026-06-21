@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { Logo } from '@/components/Logo';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { useVaultStore } from '@/store/useVaultStore';
@@ -10,12 +11,15 @@ export function Header({
   title,
   backTo,
   backFallback,
+  center,
 }: {
   title?: string;
   /** Fallback route when there is no browser history (e.g. direct link). */
   backFallback?: string;
   /** @deprecated Use backFallback — kept for call sites; back uses history first. */
   backTo?: string;
+  /** Centered content in the header bar (e.g. plan badge). */
+  center?: ReactNode;
 }) {
   const user = useVaultStore((s) => s.user);
   const familyHomeView = useVaultStore((s) => s.settings.familyHomeView ?? 'me');
@@ -39,10 +43,12 @@ export function Header({
     }
   };
 
+  const showCenter = Boolean(center) && !showMeFamilyToggle;
+
   return (
     <header className="sticky top-0 z-30 border-b border-border-soft bg-surface/80 px-4 py-3 backdrop-blur-md">
       <div
-        className={`relative mx-auto max-w-lg items-center ${showMeFamilyToggle ? 'flex min-h-10' : 'flex justify-between gap-2'}`}
+        className={`relative mx-auto max-w-lg items-center ${showMeFamilyToggle || showCenter ? 'flex min-h-10' : 'flex justify-between gap-2'}`}
       >
         <div className="relative z-10 flex min-w-0 items-center gap-2">
           {showBack && (
@@ -56,12 +62,18 @@ export function Header({
             </button>
           )}
           {isTabRoot && <Logo size="sm" className="shadow-sm" />}
-          {!showMeFamilyToggle && title && (
+          {!showMeFamilyToggle && !showCenter && title && (
             <h1 className="min-w-0 truncate text-lg font-semibold leading-tight tracking-tight">
               {title}
             </h1>
           )}
         </div>
+
+        {showCenter && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="pointer-events-auto">{center}</div>
+          </div>
+        )}
 
         {showMeFamilyToggle && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

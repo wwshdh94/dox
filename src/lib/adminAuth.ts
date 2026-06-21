@@ -1,4 +1,4 @@
-const SESSION_KEY = 'dox-admin-session';
+const SESSION_KEY = 'prevault-admin-session';
 
 interface AdminSession {
   email: string;

@@ -13,12 +13,12 @@ const steps = [
     ],
   },
   {
-    title: 'Install Dox',
-    body: ['Add to Home Screen for Share-to-Dox from WhatsApp and Gallery (Android Chrome).'],
+    title: 'Install PreVault',
+    body: ['Add to Home Screen for Share to PreVault from WhatsApp and Gallery (Android Chrome).'],
   },
   {
-    title: 'Share to Dox',
-    body: ['Share any PDF or photo → pick Dox → assign to family or asset → done.'],
+    title: 'Share to PreVault',
+    body: ['Share any PDF or photo → pick PreVault → assign to family or asset → done.'],
   },
 ];
 
@@ -41,7 +41,7 @@ export function OnboardingPage() {
   return (
     <div className="page-main animate-fade-up mx-auto max-w-lg space-y-6 py-8">
       <div>
-        <h1 className="font-display text-3xl text-text">Welcome to Dox</h1>
+        <h1 className="font-display text-3xl text-text">Welcome to PreVault</h1>
         <p className="mt-2 text-sm text-muted">A calm place for your family&apos;s important papers.</p>
       </div>
 

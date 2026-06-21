@@ -227,7 +227,7 @@ export function DocumentDetailPage() {
     const { hours, permanent, label } = shareDurationToOpts(waDuration);
     const url = createShareUrl({ hours, permanent });
     if (!url) return;
-    const text = `Dox secure link (${label}): ${url}`;
+    const text = `PreVault secure link (${label}): ${url}`;
     const target = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -250,8 +250,8 @@ export function DocumentDetailPage() {
     const { hours, permanent, label } = shareDurationToOpts(emailDuration);
     const url = createShareUrl({ hours, permanent });
     if (!url) return;
-    const subject = `Dox secure link: ${doc.title}`;
-    const body = `Here is a secure Dox link (${label}):\n\n${url}\n`;
+    const subject = `PreVault secure link: ${doc.title}`;
+    const body = `Here is a secure PreVault link (${label}):\n\n${url}\n`;
     const mailto = recipient
       ? `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
       : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -277,7 +277,7 @@ export function DocumentDetailPage() {
     if (canNativeShare) {
       try {
         await navigator.share({
-          title: `Dox: ${doc.title}`,
+          title: `PreVault: ${doc.title}`,
           text: `Secure document link (1 hr): ${doc.title}`,
           url,
         });

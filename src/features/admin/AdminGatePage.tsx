@@ -48,7 +48,7 @@ export function AdminGatePage() {
         <div className="mx-auto w-full max-w-sm space-y-4 text-center">
           <Logo size="md" className="mx-auto" />
           <h1 className="font-display text-2xl text-text">Admin</h1>
-          <p className="text-sm text-muted">Sign in to your Dox account first.</p>
+          <p className="text-sm text-muted">Sign in to your PreVault account first.</p>
           <Link to="/login" className="text-sm text-accent-ink">
             Go to sign in
           </Link>
@@ -89,7 +89,7 @@ export function AdminGatePage() {
       <form onSubmit={submit} className="mx-auto w-full max-w-sm space-y-6">
         <div className="text-center">
           <Logo size="md" className="mx-auto mb-4" />
-          <h1 className="font-display text-2xl text-text">Dox Admin</h1>
+          <h1 className="font-display text-2xl text-text">PreVault Admin</h1>
           <p className="mt-1 text-sm text-muted">
             Signed in as {user.email}. Enter your admin passcode.
           </p>

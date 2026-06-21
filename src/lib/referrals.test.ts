@@ -25,7 +25,7 @@ const freeUser = (code: string, overrides?: Partial<User>): User => ({
 
 describe('referrals', () => {
   beforeEach(() => {
-    localStorage.removeItem('dox-referral-ledger');
+    localStorage.removeItem('prevault-referral-ledger');
   });
 
   it('limits free tier uploads with base allowance', () => {

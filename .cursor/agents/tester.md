@@ -1,4 +1,4 @@
-# Dox Tester Agent
+# PreVault Tester Agent
 
 **Role:** QA engineer and UX feedback.
 

@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { debug, installGlobalErrorHandlers } from './lib/debug';
+import { migrateLegacyStorageKeys } from './lib/appMeta';
 import './styles/theme.css';
 
+migrateLegacyStorageKeys();
 installGlobalErrorHandlers();
 debug('boot', 'main.tsx loading');
 

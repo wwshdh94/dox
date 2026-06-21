@@ -12,7 +12,7 @@ import type {
   VisitingCard,
 } from '@/types';
 
-export const BACKUP_FILE_EXT = '.doxbackup';
+export const BACKUP_FILE_EXT = '.prevaultbackup';
 export const BACKUP_VERSION = 1;
 
 export interface VaultExportPayload {
@@ -29,9 +29,11 @@ export interface VaultExportPayload {
   settings: AppSettings;
 }
 
+export type BackupAppId = 'prevault' | 'dox';
+
 export interface EncryptedVaultBackup {
   version: number;
-  app: 'dox';
+  app: BackupAppId;
   createdAt: string;
   salt: string;
   iv: string;
@@ -76,7 +78,7 @@ export async function encryptVaultBackup(
 
   return {
     version: BACKUP_VERSION,
-    app: 'dox',
+    app: 'prevault',
     createdAt: new Date().toISOString(),
     salt: b64(salt),
     iv: b64(iv),
@@ -84,11 +86,15 @@ export async function encryptVaultBackup(
   };
 }
 
+function isSupportedBackupApp(app: string): app is BackupAppId {
+  return app === 'prevault' || app === 'dox';
+}
+
 export async function decryptVaultBackup(
   file: EncryptedVaultBackup,
   passphrase: string,
 ): Promise<VaultExportPayload> {
-  if (file.app !== 'dox' || file.version !== BACKUP_VERSION) {
+  if (!isSupportedBackupApp(file.app) || file.version !== BACKUP_VERSION) {
     throw new Error('Unsupported backup file format.');
   }
   const salt = fromB64(file.salt);
@@ -104,7 +110,7 @@ export async function decryptVaultBackup(
 
 export function backupFileName(date = new Date()): string {
   const d = date.toISOString().slice(0, 10);
-  return `dox-vault-backup-${d}${BACKUP_FILE_EXT}`;
+  return `prevault-vault-backup-${d}${BACKUP_FILE_EXT}`;
 }
 
 export function downloadBackupFile(backup: EncryptedVaultBackup, filename?: string): void {

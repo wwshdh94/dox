@@ -45,6 +45,10 @@ import {
 import { notifyMemberDocLimitReached, notifyMembersAtCap } from '@/lib/adminNotify';
 import { isDocumentVerified } from '@/lib/verificationQueue';
 import type { VaultExportPayload } from '@/lib/vaultBackup';
+import {
+  clearBiometricCredential,
+  registerBiometricCredential,
+} from '@/lib/biometricLock';
 
 interface VaultState {
   user: User | null;
@@ -67,9 +71,10 @@ interface VaultState {
   completeOnboarding: () => void;
   finishOnboarding: () => void;
   setSettings: (partial: Partial<AppSettings>) => void;
-  unlock: (pin: string) => boolean;
+  unlock: () => void;
   lock: () => void;
-  setLockPin: (pin: string) => void;
+  enableBiometricLock: () => Promise<{ ok: boolean; error?: string }>;
+  disableBiometricLock: () => void;
 
   addMember: (m: Omit<FamilyMember, 'id' | 'status' | 'role'> & { role?: FamilyMember['role'] }) => string;
   updateMember: (id: string, partial: Partial<FamilyMember>) => void;
@@ -464,19 +469,45 @@ export const useVaultStore = create<VaultState>()(
         set((s) => ({ settings: { ...s.settings, ...partial } }));
       },
 
-      unlock: (pin) => {
-        const { settings } = get();
-        if (!settings.lockPin || settings.lockPin === pin) {
-          set({ locked: false });
-          return true;
-        }
-        return false;
+      unlock: () => {
+        set({ locked: false });
       },
 
       lock: () => set({ locked: true }),
 
-      setLockPin: (pin) => {
-        set((s) => ({ settings: { ...s.settings, lockPin: pin }, locked: true }));
+      enableBiometricLock: async () => {
+        const { user } = get();
+        if (!user) return { ok: false, error: 'Sign in to enable biometric unlock.' };
+
+        try {
+          await registerBiometricCredential(user);
+          set((s) => ({
+            settings: {
+              ...s.settings,
+              biometricLockEnabled: true,
+              lockPin: undefined,
+            },
+            locked: true,
+          }));
+          return { ok: true };
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Could not enable biometric unlock.';
+          return { ok: false, error: message };
+        }
+      },
+
+      disableBiometricLock: () => {
+        const { user } = get();
+        if (user) clearBiometricCredential(user.id);
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            biometricLockEnabled: false,
+            lockPin: undefined,
+          },
+          locked: false,
+        }));
       },
 
       addMember: (m) => {
@@ -1202,10 +1233,13 @@ export const useVaultStore = create<VaultState>()(
       },
     }),
     {
-      name: 'dox-vault',
-      version: 4,
-      onRehydrateStorage: () => () => {
+      name: 'prevault-vault',
+      version: 5,
+      onRehydrateStorage: () => (state) => {
         queueMicrotask(() => {
+          if (state?.user && state.settings?.biometricLockEnabled) {
+            useVaultStore.setState({ locked: true });
+          }
           useVaultStore.getState().purgeExpiredShareLinks();
           useVaultStore.getState().pruneActivityLogs();
         });
@@ -1269,6 +1303,13 @@ export const useVaultStore = create<VaultState>()(
               createdByName: l.createdByName ?? actorName,
             }));
           }
+        }
+        if (version < 5 && state.settings) {
+          state.settings = {
+            ...state.settings,
+            biometricLockEnabled: state.settings.biometricLockEnabled ?? false,
+            lockPin: undefined,
+          };
         }
         return state;
       },

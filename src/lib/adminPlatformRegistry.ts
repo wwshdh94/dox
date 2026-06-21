@@ -3,7 +3,7 @@ import { membersAtDocumentCap } from '@/lib/documentLimits';
 import { isProUser } from '@/lib/planLimits';
 import { countUnverifiedDocuments, countVerifiedDocuments } from '@/lib/verificationQueue';
 
-const REGISTRY_KEY = 'dox-admin-platform-households';
+const REGISTRY_KEY = 'prevault-admin-platform-households';
 
 export interface PlatformHousehold {
   userId: string;

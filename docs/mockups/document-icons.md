@@ -1,4 +1,4 @@
-# Dox — Document & category icon mockup
+# PreVault — Document & category icon mockup
 
 **Status:** Draft for review — not wired into UI yet.
 
