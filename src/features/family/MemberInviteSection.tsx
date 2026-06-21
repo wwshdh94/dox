@@ -1,4 +1,4 @@
-import { memberAvatarGradient } from '@/lib/avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { memberHasJoined, memberLastActiveLabel, memberStatusLabel } from '@/lib/memberActivity';
 import {
   mailtoShareUrl,
@@ -38,19 +38,7 @@ export function MemberInviteSection({ member }: { member: FamilyMember }) {
   return (
     <section className="surface-panel space-y-4 p-4">
       <div className="flex items-center gap-4">
-        {member.avatarUrl ? (
-          <img
-            src={member.avatarUrl}
-            alt=""
-            className="h-16 w-16 shrink-0 rounded-2xl object-cover shadow-sm"
-          />
-        ) : (
-          <div
-            className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${memberAvatarGradient(member.displayName)} text-xl font-semibold text-white shadow-sm`}
-          >
-            {member.displayName.charAt(0)}
-          </div>
-        )}
+        <MemberAvatar member={member} size="md" />
         <div className="min-w-0 flex-1">
           <p className="font-semibold tracking-tight">{member.displayName}</p>
           <p className="text-sm text-muted">{member.relationship}</p>

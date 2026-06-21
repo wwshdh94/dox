@@ -86,7 +86,7 @@ export function ActivityLogPage() {
               onClick={() => setFilter(f.id)}
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
                 filter === f.id
-                  ? 'bg-accent-ink text-accent'
+                  ? 'bg-accent text-accent-fg'
                   : 'border border-border bg-surface-elevated text-muted'
               }`}
             >

@@ -36,6 +36,7 @@ export type DocType =
 
 export type MemberStatus = 'active' | 'disabled' | 'pending';
 export type MemberRole = 'owner' | 'viewer';
+export type MemberGender = 'male' | 'female';
 
 export interface User {
   id: string;
@@ -70,6 +71,8 @@ export interface FamilyMember {
   status: MemberStatus;
   role: MemberRole;
   avatarUrl?: string;
+  /** Used for portrait icon when no photo is uploaded. */
+  gender?: MemberGender;
   healthSummary?: HealthSummary;
   /** Token for app invite link */
   inviteToken?: string;

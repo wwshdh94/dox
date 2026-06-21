@@ -6,7 +6,7 @@ import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
 import { getExpiringDocuments, getHealthDocuments, useVaultStore } from '@/store/useVaultStore';
-import { memberAvatarGradient } from '@/lib/avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { getOwnerMember } from '@/lib/family';
 import { hasEmergencyInfo } from '@/lib/health';
 
@@ -75,11 +75,7 @@ export function HealthPage() {
             <Card key={member.id} onClick={() => navigate(`/health/${member.id}`)}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3.5">
-                  <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${memberAvatarGradient(member.displayName)} text-lg font-semibold text-white shadow-sm`}
-                  >
-                    {member.displayName.charAt(0)}
-                  </div>
+                  <MemberAvatar member={member} size="sm" documents={allDocuments} />
                   <div>
                     <p className="font-semibold tracking-tight">{member.displayName}</p>
                     <p className="text-xs text-muted">

@@ -61,7 +61,7 @@ export function Header({
               ←
             </button>
           )}
-          {isTabRoot && <Logo size="sm" className="shadow-sm" />}
+          {isTabRoot && <Logo variant="mark" size="sm" />}
           {!showMeFamilyToggle && !showCenter && title && (
             <h1 className="min-w-0 truncate text-lg font-semibold leading-tight tracking-tight">
               {title}

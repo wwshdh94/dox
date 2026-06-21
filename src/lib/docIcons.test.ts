@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { docIconSlug, docIconSrc, titleKeywordIconSlug } from '@/lib/docIcons';
+import { docIconFillScale, docIconSlug, docIconSrc, titleKeywordIconSlug } from '@/lib/docIcons';
 
 describe('docIcons', () => {
   it('maps doc types to icon slugs', () => {
@@ -35,5 +35,11 @@ describe('docIcons', () => {
   it('keeps mapped doc type icons even when title has keywords', () => {
     expect(docIconSlug('passport', 'identity', 'Passport Copy')).toBe('passport');
     expect(docIconSlug('medical_bill', 'health_medical', 'Hospital Bill')).toBe('medical_bill');
+  });
+
+  it('scales small-looking pill icons without changing slug', () => {
+    expect(docIconFillScale('passport')).toBe(1.3);
+    expect(docIconFillScale('other', 'other', 'Phone Bill')).toBe(1.3);
+    expect(docIconFillScale('pan')).toBe(1);
   });
 });

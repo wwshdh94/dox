@@ -1,27 +1,30 @@
 @import 'tailwindcss';
 
 :root {
+  --brand-navy: #002040;
+  --brand-gold: #8a6d38;
   --bg: #f5f1ea;
   --bg-subtle: #ebe6dc;
   --surface: #fdfbf7;
   --surface-elevated: #ffffff;
-  --border: #e3ddd3;
-  --border-soft: #efeae2;
-  --text: #1f1c1a;
-  --muted: #6f6760;
-  --accent: #fffef9;
-  --accent-hover: #f5f1ec;
-  --accent-soft: #faf7f2;
-  --accent-muted: #e6e1d8;
-  --accent-fg: #1f1c1a;
-  --accent-ink: #4a4540;
-  --warning: #b8860b;
-  --danger: #b54a4a;
-  --success: #4d7c5f;
-  --gold: #c9a227;
-  --gold-light: #f0d56b;
-  --gold-dark: #9a7212;
-  --gold-border: #d4af37;
+  --border: #c9c0b4;
+  --border-soft: #e3ddd3;
+  --text: #0f1f33;
+  --muted: #4f5b68;
+  --placeholder: #6a7785;
+  --accent: #002040;
+  --accent-hover: #003058;
+  --accent-soft: #eef2f7;
+  --accent-muted: #c5d0dc;
+  --accent-fg: #f5f1ea;
+  --accent-ink: #002040;
+  --warning: #876308;
+  --danger: #9e3f3f;
+  --success: #386b4f;
+  --gold: #8a6d38;
+  --gold-light: #b8965a;
+  --gold-dark: #6b5428;
+  --gold-border: #a08040;
   --shadow-sm: 0 1px 2px rgb(31 28 26 / 0.04), 0 2px 8px rgb(31 28 26 / 0.03);
   --shadow-md: 0 4px 16px rgb(31 28 26 / 0.06), 0 1px 3px rgb(31 28 26 / 0.04);
   --shadow-lg: 0 12px 32px rgb(31 28 26 / 0.08), 0 4px 8px rgb(31 28 26 / 0.04);
@@ -30,27 +33,30 @@
 }
 
 .dark {
-  --bg: #161412;
-  --bg-subtle: #1e1b18;
-  --surface: #211e1b;
-  --surface-elevated: #2a2622;
-  --border: #3a3530;
-  --border-soft: #2f2b27;
-  --text: #f2ebe3;
-  --muted: #a69e94;
-  --accent: #faf6f0;
-  --accent-hover: #fffcf8;
-  --accent-soft: #2f2b27;
-  --accent-muted: #3d3834;
-  --accent-fg: #1f1c1a;
-  --accent-ink: #e8dfd4;
+  --brand-navy: #7eb0e8;
+  --brand-gold: #c4a060;
+  --bg: #0c1219;
+  --bg-subtle: #121a24;
+  --surface: #141c27;
+  --surface-elevated: #1a2433;
+  --border: #2a3544;
+  --border-soft: #1f2835;
+  --text: #e8edf3;
+  --muted: #9aa8b8;
+  --placeholder: #8b98a8;
+  --accent: #e8edf3;
+  --accent-hover: #f4f7fa;
+  --accent-soft: #1a2433;
+  --accent-muted: #243044;
+  --accent-fg: #0c1219;
+  --accent-ink: #9ec5f0;
   --warning: #d4a84b;
   --danger: #e07a7a;
   --success: #6ba382;
-  --gold: #ddb830;
-  --gold-light: #f2dc72;
-  --gold-dark: #a67c00;
-  --gold-border: #e8c547;
+  --gold: #c4a060;
+  --gold-light: #dbb878;
+  --gold-dark: #8a6d38;
+  --gold-border: #c4a060;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.2), 0 2px 8px rgb(0 0 0 / 0.15);
   --shadow-md: 0 4px 16px rgb(0 0 0 / 0.25), 0 1px 3px rgb(0 0 0 / 0.15);
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.35), 0 4px 8px rgb(0 0 0 / 0.2);
@@ -65,6 +71,7 @@
   --color-border-soft: var(--border-soft);
   --color-text: var(--text);
   --color-muted: var(--muted);
+  --color-placeholder: var(--placeholder);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
@@ -107,7 +114,7 @@ body::before {
   pointer-events: none;
   z-index: -1;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, var(--accent-soft) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--brand-navy) 6%, transparent) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%);
 }
 

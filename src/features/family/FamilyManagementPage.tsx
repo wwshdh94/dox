@@ -2,15 +2,15 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
-import { Input } from '@/components/Input';
+import { Input, RadioGroup } from '@/components/Input';
 import { Modal } from '@/components/Modal';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { UpgradeHint } from '@/components/UpgradeHint';
-import { memberAvatarGradient } from '@/lib/avatar';
 import { readFileDataUrl } from '@/lib/files';
 import { memberHasJoined, memberLastActiveLabel, memberStatusLabel } from '@/lib/memberActivity';
 import { canAddMember, canEnableMember, remainingMemberSlots } from '@/lib/planLimits';
 import { useVaultStore } from '@/store/useVaultStore';
-import type { FamilyMember } from '@/types';
+import type { FamilyMember, MemberGender } from '@/types';
 
 function MemberEditModal({
   member,
@@ -27,6 +27,7 @@ function MemberEditModal({
   const [phone, setPhone] = useState(member.phone ?? '');
   const [email, setEmail] = useState(member.email ?? '');
   const [avatarUrl, setAvatarUrl] = useState(member.avatarUrl ?? '');
+  const [gender, setGender] = useState<MemberGender | ''>(member.gender ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const save = () => {
@@ -35,23 +36,23 @@ function MemberEditModal({
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       avatarUrl: avatarUrl || undefined,
+      gender: gender || undefined,
     });
     onClose();
+  };
+
+  const previewMember: FamilyMember = {
+    ...member,
+    displayName: displayName.trim() || member.displayName,
+    avatarUrl: avatarUrl || undefined,
+    gender: gender || undefined,
   };
 
   return (
     <Modal open={open} onClose={onClose} title="Edit member">
       <div className="space-y-4">
         <div className="flex flex-col items-center gap-3">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-20 w-20 rounded-2xl object-cover" />
-          ) : (
-            <div
-              className={`flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${memberAvatarGradient(displayName)} text-2xl font-semibold text-white`}
-            >
-              {displayName.charAt(0) || '?'}
-            </div>
-          )}
+          <MemberAvatar member={previewMember} size="lg" showGenderPrompt={false} />
           <input
             ref={fileRef}
             type="file"
@@ -70,6 +71,19 @@ function MemberEditModal({
         <Input label="Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91…" />
         <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        {!avatarUrl && (
+          <RadioGroup
+            label="Gender (for portrait icon)"
+            name="edit-gender"
+            value={gender || 'unset'}
+            onChange={(v) => setGender(v === 'unset' ? '' : (v as MemberGender))}
+            options={[
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
+              { value: 'unset', label: 'Not set' },
+            ]}
+          />
+        )}
         {!memberHasJoined(member) && member.role !== 'owner' && (
           <Button variant="secondary" className="w-full text-xs" onClick={() => markMemberJoined(member.id)}>
             Mark as joined (demo)
@@ -86,6 +100,7 @@ function MemberEditModal({
 export function FamilyManagementPage() {
   const user = useVaultStore((s) => s.user);
   const members = useVaultStore((s) => s.members);
+  const documents = useVaultStore((s) => s.documents);
   const addMember = useVaultStore((s) => s.addMember);
   const disableMember = useVaultStore((s) => s.disableMember);
   const enableMember = useVaultStore((s) => s.enableMember);
@@ -97,6 +112,7 @@ export function FamilyManagementPage() {
   const [relationship, setRelationship] = useState('Spouse');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [gender, setGender] = useState<MemberGender | ''>('');
   const [memberError, setMemberError] = useState('');
 
   const activeMembers = members.filter((m) => m.status !== 'disabled');
@@ -118,15 +134,7 @@ export function FamilyManagementPage() {
           <p className="section-label">Members</p>
           {activeMembers.map((member) => (
             <div key={member.id} className="surface-panel flex items-center gap-3 p-4">
-              {member.avatarUrl ? (
-                <img src={member.avatarUrl} alt="" className="h-12 w-12 rounded-2xl object-cover" />
-              ) : (
-                <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${memberAvatarGradient(member.displayName)} text-lg font-semibold text-white`}
-                >
-                  {member.displayName.charAt(0)}
-                </div>
-              )}
+              <MemberAvatar member={member} size="sm" documents={documents} showGenderPrompt={false} />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{member.displayName}</p>
                 <p className="text-xs text-muted">{member.relationship}</p>
@@ -213,6 +221,17 @@ export function FamilyManagementPage() {
           <Input label="Relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)} />
           <Input label="Phone (optional)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91…" />
           <Input label="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <RadioGroup
+            label="Gender (for portrait icon)"
+            name="add-gender"
+            value={gender || 'unset'}
+            onChange={(v) => setGender(v === 'unset' ? '' : (v as MemberGender))}
+            options={[
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
+              { value: 'unset', label: 'Ask me later' },
+            ]}
+          />
           {memberError && <p className="text-sm text-danger">{memberError}</p>}
           <Button
             className="w-full"
@@ -223,6 +242,7 @@ export function FamilyManagementPage() {
                 relationship,
                 phone: phone.trim() || undefined,
                 email: email.trim() || undefined,
+                gender: gender || undefined,
               });
               if (!id) {
                 setMemberError('Family member limit reached on your plan.');
@@ -232,6 +252,7 @@ export function FamilyManagementPage() {
               setName('');
               setPhone('');
               setEmail('');
+              setGender('');
             }}
           >
             Add

@@ -7,7 +7,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants = {
   primary:
-    'border border-accent-muted bg-accent text-accent-fg shadow-sm hover:bg-accent-hover hover:shadow-md active:scale-[0.98]',
+    'border border-accent bg-accent text-accent-fg shadow-sm hover:bg-accent-hover hover:shadow-md active:scale-[0.98]',
   secondary:
     'border border-border bg-surface-elevated text-text shadow-sm hover:border-accent-muted hover:bg-accent-soft/40',
   ghost: 'text-muted hover:bg-accent-soft/50 hover:text-text',

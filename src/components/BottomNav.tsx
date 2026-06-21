@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 function NavIcon({ children, active }: { children: React.ReactNode; active: boolean }) {
   return (
     <span
-      className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg transition-colors ${active ? 'border border-accent-muted bg-accent text-accent-fg shadow-sm' : 'bg-bg-subtle text-muted'}`}
+      className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg transition-colors ${active ? 'border border-accent bg-accent text-accent-fg shadow-sm' : 'bg-bg-subtle text-muted'}`}
     >
       {children}
     </span>

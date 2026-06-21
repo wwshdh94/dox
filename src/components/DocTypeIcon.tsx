@@ -1,4 +1,4 @@
-import { docIconSrc, type DocIconSize } from '@/lib/docIcons';
+import { docIconFillScale, docIconSrc, type DocIconSize } from '@/lib/docIcons';
 import type { DocCategory, DocType } from '@/types';
 
 const sizeClass: Record<DocIconSize, string> = {
@@ -30,9 +30,10 @@ export function DocTypeIcon({
   alt?: string;
 }) {
   const src = docIconSrc(docType, category, title);
-  const fillWidth = compact ? 'w-[calc(3.5rem*0.91)]' : 'w-[calc(3.5rem*1.3)]';
+  const fillScale = fill ? docIconFillScale(docType, category, title) : 1;
+  const fillWidth = compact ? 'w-11' : 'w-[calc(3.5rem*1.3)]';
   const wrapperClass = fill
-    ? `inline-flex h-full ${fillWidth} shrink-0 items-center justify-center overflow-hidden rounded-none`
+    ? `inline-flex self-stretch ${fillWidth} shrink-0 items-stretch justify-center overflow-hidden rounded-none`
     : `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent-soft/60 ${sizeClass[size]}`;
 
   return (
@@ -42,9 +43,10 @@ export function DocTypeIcon({
         alt={alt}
         className={
           fill
-            ? 'h-full w-full max-h-full max-w-full object-contain object-center p-1'
+            ? 'h-full w-full object-cover object-center'
             : 'h-full w-full object-contain object-center p-0.5'
         }
+        style={fillScale !== 1 ? { transform: `scale(${fillScale})` } : undefined}
         loading="lazy"
         decoding="async"
       />

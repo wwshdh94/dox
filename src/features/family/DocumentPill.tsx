@@ -86,7 +86,7 @@ export function DocumentPill({
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex">
+      <div className="flex items-stretch">
         <DocTypeIcon
           docType={document.docType}
           category={tags.category}
@@ -96,7 +96,7 @@ export function DocumentPill({
           className="rounded-l-[var(--radius-lg)]"
         />
         <div
-          className={`flex min-w-0 flex-1 flex-col justify-center ${compact ? 'gap-0.5 px-1.5 py-1' : 'gap-1 px-2 py-1.5'}`}
+          className={`flex min-w-0 flex-1 flex-col justify-center ${compact ? 'gap-0 px-1.5 py-0.5' : 'gap-0.5 px-2 py-1'}`}
         >
           <div
             role="button"
@@ -124,12 +124,10 @@ export function DocumentPill({
             </div>
           </div>
           {value ? (
-            <div
-              className={`flex items-center rounded-lg bg-accent-soft/40 ${compact ? 'gap-1 px-1.5 py-0.5' : 'gap-1.5 px-2 py-1'}`}
-            >
+            <div className="flex items-center">
               <button
                 type="button"
-                className={`min-w-0 flex-1 truncate text-left font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}
+                className={`truncate text-left font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}
                 onClick={revealed ? copyRevealed : toggleReveal}
                 title={revealed ? 'Tap to copy' : undefined}
               >
@@ -140,7 +138,7 @@ export function DocumentPill({
                 onClick={toggleReveal}
                 aria-label={revealed ? 'Hide value' : 'Show value'}
                 aria-pressed={revealed}
-                className={`shrink-0 rounded-md text-accent-ink transition-colors hover:bg-accent-soft ${compact ? 'p-0.5' : 'p-1'}`}
+                className="shrink-0 text-accent-ink ml-[2ch]"
               >
                 <EyeToggleIcon revealed={revealed} compact={compact} />
               </button>

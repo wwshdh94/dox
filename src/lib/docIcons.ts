@@ -99,6 +99,21 @@ export function docIconSrc(
   return `/icons/docs/${docIconSlug(docType, category, title)}.png`;
 }
 
+/** Zoom specific icons inside the pill rail without changing rail/pill size. */
+const FILL_ICON_SCALE: Partial<Record<string, number>> = {
+  passport: 1.3,
+  bill: 1.3,
+};
+
+export function docIconFillScale(
+  docType: DocType,
+  category?: DocCategory,
+  title?: string,
+): number {
+  const slug = docIconSlug(docType, category, title);
+  return FILL_ICON_SCALE[slug] ?? 1;
+}
+
 export const DOC_ICON_SIZES = {
   sm: 32,
   md: 40,

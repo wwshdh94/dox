@@ -34,7 +34,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] Back navigation on all sub-pages via Header ← button + smart route fallbacks
 - [x] **Document tags** — domain (family/health/assets) + category; tab-scoped filtering
 - [x] **Family tab Me | Family toggle** — Me shows owner vault inline; Family shows other members
-- [x] **PreVault logo** — nameless geometric abstract mark (`Logo` component, `public/logo.svg`, favicon)
+- [x] **PreVault logo** — shield mark + full wordmark from `docs/logo/`; PWA/home-screen icons use mark only (`scripts/generate_app_icons.py`)
 - [x] **Shared bundles** — FAB entry, save bundles, temp share links (`/p/:token`), activity log, print view with anti-crop watermark
 - [x] **Backup & restore** — encrypted `.prevaultbackup` file + Google Drive upload/restore (`/profile/backup`)
 - [x] **Member profiles** — phone, email, photo; invite to app (WhatsApp / email / copy link)
@@ -53,6 +53,13 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Mobile typography** — `.page-main` uses smaller body text on phones; header + bottom nav unchanged
 - [x] **Settings split** — Profile → **Appearance** (theme) vs **Account & reminders** (push/email, AI extraction, recovery code)
 - [x] **Document pill icons** — flat lightweight PNGs in `public/icons/docs/` (~39KB total); title-keyword fallback for `other` docs (Bill, Card, Invoice, etc.); generator at `scripts/generate_doc_icons.py`
+- [x] **Document pill layout** — tighter padding; icon fills left rail (`object-cover`); masked value + eye inline with `4ch` gap
+- [x] **Brand theme** — navy (`#002040`) + gold (`#a08040`) palette aligned to logo assets
+- [x] **Member avatars** — uploaded photo or gender + age portrait icons (Man/Woman/Boy/Girl/Old Man/Old Woman); DOB inferred from docs
+- [x] **Expiring banner cooldown** — dismiss hides banner for 3 days; home "due soon" count opens filtered expiring list per member
+- [x] **Document category filters** — Documents section on home/member pages: All, ID, Travel, Vehicle, Insurance pills (only categories with docs shown)
+- [x] **Member detail = home layout** — `/family/:id` matches homepage Me view (search, banners, avatar, doc stats, category filters, FAB); shared via `MemberVaultView`
+- [x] **Due soon filter pill** — member pages show warning-styled "Due soon" filter alongside ID/Travel/Vehicle/Insurance; clickable stats + expiring banner per member
 
 ## In progress
 
@@ -85,7 +92,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 ## Test results
 
 ```
-npm test  — 66/66 pass
+npm test  — 69/69 pass
 npm run build — success (PWA SW generated)
 ```
 

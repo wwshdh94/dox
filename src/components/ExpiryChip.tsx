@@ -13,9 +13,9 @@ export function ExpiryChip({
   if (!date || status === 'none') return null;
   const days = daysUntil(date);
   const colors = {
-    ok: 'bg-success/12 text-success ring-1 ring-success/20',
-    expiring: 'bg-warning/12 text-warning ring-1 ring-warning/25',
-    expired: 'bg-danger/12 text-danger ring-1 ring-danger/20',
+    ok: 'bg-success/15 text-success ring-1 ring-success/30',
+    expiring: 'bg-warning/15 text-warning ring-1 ring-warning/35',
+    expired: 'bg-danger/15 text-danger ring-1 ring-danger/30',
   };
   const label =
     status === 'expired'
@@ -50,7 +50,7 @@ export function ExpiringBanner({
 }) {
   if (count === 0) return null;
   return (
-    <div className="mb-1 flex items-stretch gap-1 rounded-2xl border border-warning/25 bg-warning/8 shadow-sm">
+    <div className="mb-1 flex items-stretch gap-1 rounded-2xl border border-warning/35 bg-warning/12 shadow-sm">
       <button
         type="button"
         onClick={onClick}
