@@ -16,6 +16,7 @@ import {
   tempLinkDurationHours,
 } from '@/lib/planLimits';
 import { fieldLabelFor } from '@/lib/docFields';
+import { canDeleteDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
 import { UpgradeHint } from '@/components/UpgradeHint';
 
 function ShareWhatsAppIcon() {
@@ -182,9 +183,24 @@ export function DocumentDetailPage() {
     );
   }
 
+  if (!canViewDocument(doc, members, user, shareGrants, allDocuments)) {
+    return (
+      <div className="min-h-full pb-28">
+        <Header title="Document" backFallback="/" />
+        <main className="page-main animate-fade-up">
+          <p className="text-sm text-muted">You don&apos;t have access to this document.</p>
+        </main>
+        <BottomNav />
+      </div>
+    );
+  }
+
   const backTo = documentBackPath(doc);
   const renewalEligible = expiryStatus(doc.expiryDate) === 'expiring' || expiryStatus(doc.expiryDate) === 'expired';
-  const viewer = members.find((m) => m.role === 'viewer');
+  const viewer = members.find((m) => m.role === 'viewer' && m.status !== 'disabled');
+  const canControlFamilyAccess = canManageDocumentFamilyAccess(doc, members, user, allDocuments);
+  const canDelete = canDeleteDocument(doc, members, user, allDocuments);
+  const minorManaged = isMinorManagedDocument(doc, members, allDocuments);
   const familyAccessEnabled = Boolean(viewer && shareGrants.some((g) => g.documentId === doc.id && g.memberId === viewer.id));
 
   const saveNotes = () => {
@@ -369,16 +385,38 @@ export function DocumentDetailPage() {
               Mark renewed
             </Button>
           )}
+          {minorManaged && !canControlFamilyAccess ? (
+            <div
+              className="flex min-h-11 min-w-[10.5rem] flex-1 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 opacity-60 shadow-sm sm:flex-none"
+              title="Ask a parent or guardian to change family access or delete this document"
+            >
+              <span className="text-sm font-semibold tracking-tight text-text">Family access</span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wide ${
+                    familyAccessEnabled ? 'text-success' : 'text-muted'
+                  }`}
+                >
+                  {familyAccessEnabled ? 'On' : 'Off'}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                  Parent only
+                </span>
+              </div>
+            </div>
+          ) : (
           <div
             className={`flex min-h-11 min-w-[10.5rem] flex-1 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 shadow-sm sm:flex-none ${
-              viewer ? '' : 'opacity-60'
+              viewer && canControlFamilyAccess ? '' : 'opacity-60'
             }`}
             title={
-              viewer
-                ? familyAccessEnabled
-                  ? `${viewer.displayName} can view in Family tab`
-                  : `Share with ${viewer.displayName} in Family tab`
-                : 'Add a family viewer in Profile → Family members'
+              !canControlFamilyAccess
+                ? 'Only the vault owner (until member joins), document owner, or parent/guardian can change family access'
+                : viewer
+                  ? familyAccessEnabled
+                    ? `${viewer.displayName} can view in Family tab`
+                    : `Share with ${viewer.displayName} in Family tab`
+                  : 'Add a family viewer in Profile → Family members'
             }
           >
             <span className="text-sm font-semibold tracking-tight text-text">Family access</span>
@@ -392,9 +430,9 @@ export function DocumentDetailPage() {
               </span>
               <button
                 type="button"
-                disabled={!viewer}
+                disabled={!viewer || !canControlFamilyAccess}
                 onClick={() => {
-                  if (!viewer) return;
+                  if (!viewer || !canControlFamilyAccess) return;
                   if (familyAccessEnabled) revokeShare(doc.id, viewer.id);
                   else addShareGrant(doc.id, viewer.id);
                 }}
@@ -402,7 +440,7 @@ export function DocumentDetailPage() {
                   familyAccessEnabled
                     ? 'bg-success shadow-sm ring-2 ring-success/35'
                     : 'bg-border'
-                } ${!viewer ? 'cursor-not-allowed' : ''}`}
+                } ${!viewer || !canControlFamilyAccess ? 'cursor-not-allowed' : ''}`}
                 aria-pressed={familyAccessEnabled}
                 aria-label="Toggle family access"
               >
@@ -414,6 +452,7 @@ export function DocumentDetailPage() {
               </button>
             </div>
           </div>
+          )}
         </div>
 
         {shareError && <p className="text-sm text-danger">{shareError}</p>}
@@ -434,7 +473,13 @@ export function DocumentDetailPage() {
           <Button variant="secondary" className="w-full" onClick={() => setArchiveOpen(true)}>
             Archive
           </Button>
-          <Button variant="danger" className="w-full" onClick={() => setDeleteOpen(true)}>
+          <Button
+            variant="danger"
+            className="w-full"
+            disabled={!canDelete}
+            title={!canDelete ? 'Ask a parent or guardian to delete this document' : undefined}
+            onClick={() => setDeleteOpen(true)}
+          >
             Delete
           </Button>
         </div>

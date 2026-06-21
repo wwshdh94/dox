@@ -1,12 +1,18 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
-import { Input, RadioGroup } from '@/components/Input';
+import { Input, RadioGroup, Select } from '@/components/Input';
 import { Modal } from '@/components/Modal';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { UpgradeHint } from '@/components/UpgradeHint';
 import { readFileDataUrl } from '@/lib/files';
+import { getOwnerMember } from '@/lib/family';
+import {
+  eligibleParentMembers,
+  isChildRelationship,
+  MEMBER_RELATIONSHIPS,
+} from '@/lib/memberRelations';
 import { memberHasJoined, memberLastActiveLabel, memberStatusLabel } from '@/lib/memberActivity';
 import { canAddMember, canEnableMember, remainingMemberSlots } from '@/lib/planLimits';
 import { useVaultStore } from '@/store/useVaultStore';
@@ -21,22 +27,35 @@ function MemberEditModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const members = useVaultStore((s) => s.members);
   const updateMember = useVaultStore((s) => s.updateMember);
   const markMemberJoined = useVaultStore((s) => s.markMemberJoined);
   const [displayName, setDisplayName] = useState(member.displayName);
+  const [relationship, setRelationship] = useState(member.relationship);
   const [phone, setPhone] = useState(member.phone ?? '');
   const [email, setEmail] = useState(member.email ?? '');
   const [avatarUrl, setAvatarUrl] = useState(member.avatarUrl ?? '');
   const [gender, setGender] = useState<MemberGender | ''>(member.gender ?? '');
+  const [parentMemberId, setParentMemberId] = useState(member.parentMemberId ?? '');
+  const [dateOfBirth, setDateOfBirth] = useState(member.dateOfBirth ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const parentOptions = useMemo(
+    () => eligibleParentMembers(members, member.id),
+    [members, member.id],
+  );
+  const isChild = isChildRelationship(relationship);
 
   const save = () => {
     updateMember(member.id, {
       displayName: displayName.trim() || member.displayName,
+      relationship: relationship.trim() || member.relationship,
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       avatarUrl: avatarUrl || undefined,
       gender: gender || undefined,
+      parentMemberId: isChild ? parentMemberId || undefined : undefined,
+      dateOfBirth: isChild ? dateOfBirth.trim() || undefined : undefined,
     });
     onClose();
   };
@@ -44,8 +63,11 @@ function MemberEditModal({
   const previewMember: FamilyMember = {
     ...member,
     displayName: displayName.trim() || member.displayName,
+    relationship,
     avatarUrl: avatarUrl || undefined,
     gender: gender || undefined,
+    parentMemberId: isChild ? parentMemberId || undefined : undefined,
+    dateOfBirth: isChild ? dateOfBirth.trim() || undefined : undefined,
   };
 
   return (
@@ -69,6 +91,42 @@ function MemberEditModal({
           </Button>
         </div>
         <Input label="Name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        <Select
+          label="Relationship"
+          value={relationship}
+          onChange={(e) => setRelationship(e.target.value)}
+        >
+          {MEMBER_RELATIONSHIPS.map((rel) => (
+            <option key={rel} value={rel}>
+              {rel}
+            </option>
+          ))}
+        </Select>
+        {isChild && (
+          <>
+            <Select
+              label="Parent / guardian"
+              value={parentMemberId}
+              onChange={(e) => setParentMemberId(e.target.value)}
+            >
+              <option value="">Select parent</option>
+              {parentOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.displayName} ({p.relationship})
+                </option>
+              ))}
+            </Select>
+            <Input
+              label="Date of birth"
+              type="date"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+            />
+            <p className="text-xs text-muted">
+              Documents for members under 18 stay with their parent or guardian.
+            </p>
+          </>
+        )}
         <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91…" />
         <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         {!avatarUrl && (
@@ -109,11 +167,17 @@ export function FamilyManagementPage() {
   const [editMember, setEditMember] = useState<FamilyMember | null>(null);
   const [enableError, setEnableError] = useState('');
   const [name, setName] = useState('');
-  const [relationship, setRelationship] = useState('Spouse');
+  const [relationship, setRelationship] = useState<string>('Spouse');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState<MemberGender | ''>('');
+  const [parentMemberId, setParentMemberId] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [memberError, setMemberError] = useState('');
+
+  const owner = useMemo(() => getOwnerMember(members), [members]);
+  const parentOptions = useMemo(() => eligibleParentMembers(members), [members]);
+  const isChild = isChildRelationship(relationship);
 
   const activeMembers = members.filter((m) => m.status !== 'disabled');
   const disabledMembers = members.filter((m) => m.status === 'disabled');
@@ -121,13 +185,24 @@ export function FamilyManagementPage() {
   const canAdd = canAddMember(user, members);
   const canEnable = canEnableMember(user, members);
 
+  const resetAddForm = () => {
+    setName('');
+    setRelationship('Spouse');
+    setPhone('');
+    setEmail('');
+    setGender('');
+    setParentMemberId(owner?.id ?? '');
+    setDateOfBirth('');
+    setMemberError('');
+  };
+
   return (
     <div className="min-h-full pb-28">
       <Header title="Family" backFallback="/profile" />
       <main className="page-main animate-fade-up space-y-5">
         <p className="text-sm text-muted">
-          Add members, edit contact details, and manage access. Document vaults stay on each member&apos;s
-          page from Home.
+          Add members, set their relationship, and link children to a parent. Documents for members
+          under 18 are managed by their parent or guardian.
         </p>
 
         <section className="space-y-2">
@@ -138,6 +213,12 @@ export function FamilyManagementPage() {
               <div className="min-w-0 flex-1">
                 <p className="font-semibold">{member.displayName}</p>
                 <p className="text-xs text-muted">{member.relationship}</p>
+                {member.parentMemberId && (
+                  <p className="text-xs text-muted">
+                    Parent:{' '}
+                    {members.find((m) => m.id === member.parentMemberId)?.displayName ?? 'Linked'}
+                  </p>
+                )}
                 <p className="mt-1 text-xs text-muted">
                   {memberStatusLabel(member)}
                   {memberHasJoined(member) && ` · ${memberLastActiveLabel(member)}`}
@@ -204,7 +285,7 @@ export function FamilyManagementPage() {
           className="w-full"
           disabled={!canAdd}
           onClick={() => {
-            setMemberError('');
+            resetAddForm();
             setAddOpen(true);
           }}
         >
@@ -218,7 +299,44 @@ export function FamilyManagementPage() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add family member">
         <div className="space-y-4">
           <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input label="Relationship" value={relationship} onChange={(e) => setRelationship(e.target.value)} />
+          <Select
+            label="Relationship"
+            value={relationship}
+            onChange={(e) => {
+              setRelationship(e.target.value);
+              if (isChildRelationship(e.target.value) && owner && !parentMemberId) {
+                setParentMemberId(owner.id);
+              }
+            }}
+          >
+            {MEMBER_RELATIONSHIPS.map((rel) => (
+              <option key={rel} value={rel}>
+                {rel}
+              </option>
+            ))}
+          </Select>
+          {isChild && (
+            <>
+              <Select
+                label="Parent / guardian"
+                value={parentMemberId}
+                onChange={(e) => setParentMemberId(e.target.value)}
+              >
+                <option value="">Select parent</option>
+                {parentOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName} ({p.relationship})
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="Date of birth"
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+              />
+            </>
+          )}
           <Input label="Phone (optional)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91…" />
           <Input label="Email (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           <RadioGroup
@@ -237,22 +355,25 @@ export function FamilyManagementPage() {
             className="w-full"
             onClick={() => {
               if (!name.trim()) return;
+              if (isChild && !parentMemberId) {
+                setMemberError('Select a parent or guardian for children under 18.');
+                return;
+              }
               const id = addMember({
                 displayName: name.trim(),
                 relationship,
                 phone: phone.trim() || undefined,
                 email: email.trim() || undefined,
                 gender: gender || undefined,
+                parentMemberId: isChild ? parentMemberId : undefined,
+                dateOfBirth: isChild ? dateOfBirth.trim() || undefined : undefined,
               });
               if (!id) {
                 setMemberError('Family member limit reached on your plan.');
                 return;
               }
               setAddOpen(false);
-              setName('');
-              setPhone('');
-              setEmail('');
-              setGender('');
+              resetAddForm();
             }}
           >
             Add

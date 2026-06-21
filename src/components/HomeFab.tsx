@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import { Input, Select, Textarea } from '@/components/Input';
 import { useVaultStore } from '@/store/useVaultStore';
+import { memberSelectLabel } from '@/lib/family';
 
 type HomeContext = 'family' | 'assets' | 'health';
 type FabTier = 'wide' | 'mediumWide' | 'medium' | 'narrow';
@@ -128,7 +129,7 @@ function QuickNoteModal({
           <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
             {members.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.displayName}
+                {memberSelectLabel(m)}
               </option>
             ))}
           </Select>

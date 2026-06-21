@@ -9,6 +9,7 @@ import { getExpiringDocuments, useVaultStore } from '@/store/useVaultStore';
 import { daysUntil } from '@/lib/format';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { docsForMemberByDomain, isHealthDomainDoc } from '@/lib/docTags';
+import { canViewDocument } from '@/lib/documentVisibility';
 import { MemberDocStats } from '@/components/MemberDocStats';
 import { dismissExpiringBanner, isExpiringBannerDismissed } from '@/lib/expiringBanner';
 import { getOwnerMember, getOtherFamilyMembers } from '@/lib/family';
@@ -25,6 +26,8 @@ export function FamilyPage() {
     [allMembers],
   );
   const documents = useVaultStore((s) => s.documents);
+  const shareGrants = useVaultStore((s) => s.shareGrants);
+  const user = useVaultStore((s) => s.user);
   const familyHomeView = useVaultStore((s) => s.settings.familyHomeView ?? 'me');
   const owner = useMemo(() => getOwnerMember(members), [members]);
   const otherMembers = useMemo(() => getOtherFamilyMembers(members), [members]);
@@ -38,6 +41,7 @@ export function FamilyPage() {
     return documents.filter((d) => {
       if (d.archivedAt) return false;
       if (isHealthDomainDoc(d)) return false;
+      if (!canViewDocument(d, members, user, shareGrants, documents)) return false;
       const member = members.find((m) => m.id === d.memberId);
       const haystack = [
         d.title,
@@ -51,14 +55,16 @@ export function FamilyPage() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [search, documents, members]);
+  }, [search, documents, members, user, shareGrants]);
 
   const searching = search.trim().length > 0;
 
   const expiringDocs = useMemo(() => {
     const nonHealth = documents.filter((d) => !isHealthDomainDoc(d));
-    return getExpiringDocuments(nonHealth);
-  }, [documents]);
+    return getExpiringDocuments(nonHealth).filter((d) =>
+      canViewDocument(d, members, user, shareGrants, documents),
+    );
+  }, [documents, members, user, shareGrants]);
 
   useEffect(() => {
     setBannerDismissed(isExpiringBannerDismissed());
@@ -198,6 +204,8 @@ export function FamilyPage() {
 
 export function ExpiringPage() {
   const documents = useVaultStore((s) => s.documents);
+  const shareGrants = useVaultStore((s) => s.shareGrants);
+  const user = useVaultStore((s) => s.user);
   const members = useVaultStore((s) => s.members);
   const assets = useVaultStore((s) => s.assets);
   const [searchParams] = useSearchParams();
@@ -207,10 +215,12 @@ export function ExpiringPage() {
   const filterMember = memberId ? members.find((m) => m.id === memberId) : undefined;
 
   const expiring = useMemo(() => {
-    const all = getExpiringDocuments(documents.filter((d) => !isHealthDomainDoc(d)));
+    const all = getExpiringDocuments(documents.filter((d) => !isHealthDomainDoc(d))).filter((d) =>
+      canViewDocument(d, members, user, shareGrants, documents),
+    );
     if (!memberId) return all;
     return all.filter((d) => d.memberId === memberId);
-  }, [documents, memberId]);
+  }, [documents, memberId, members, user, shareGrants]);
 
   return (
     <div className="min-h-full pb-28">

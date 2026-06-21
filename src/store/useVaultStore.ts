@@ -14,6 +14,8 @@ import type {
   VisitingCard,
 } from '@/types';
 import { uid } from '@/lib/format';
+import { canDeleteDocument, canManageDocumentFamilyAccess } from '@/lib/documentVisibility';
+import { canManageFamilyAccess } from '@/lib/family';
 import { appendAdminEvent } from '@/lib/adminEvents';
 import { syncPlatformHouseholdFromVault } from '@/lib/adminPlatformRegistry';
 import { generateInviteToken } from '@/lib/invites';
@@ -145,6 +147,7 @@ const defaultSettings: AppSettings = {
   cloudAiEnabled: false,
   privacyMode: true,
   onboardingComplete: false,
+  familyHomeView: 'me',
 };
 
 function shareActor(state: Pick<VaultState, 'user' | 'members'>): { memberId?: string; name: string } {
@@ -557,6 +560,10 @@ export const useVaultStore = create<VaultState>()(
               email: m.email,
               phone: m.phone,
               relationship: m.relationship,
+              gender: m.gender,
+              avatarUrl: m.avatarUrl,
+              parentMemberId: m.parentMemberId,
+              dateOfBirth: m.dateOfBirth,
               status: isOwner ? 'active' : 'pending',
               role: m.role ?? 'viewer',
               joinedAt: isOwner ? now : undefined,
@@ -818,6 +825,8 @@ export const useVaultStore = create<VaultState>()(
       },
 
       deleteDocument: (id) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc || !canDeleteDocument(doc, get().members, get().user, get().documents)) return;
         get().logActivity('deleted', {}, id);
         set((s) => ({
           documents: s.documents.filter((d) => d.id !== id),
@@ -894,6 +903,8 @@ export const useVaultStore = create<VaultState>()(
       },
 
       addShareGrant: (documentId, memberId) => {
+        const doc = get().documents.find((d) => d.id === documentId);
+        if (!doc || !canManageDocumentFamilyAccess(doc, get().members, get().user, get().documents)) return;
         set((s) => ({
           shareGrants: [...s.shareGrants, { id: uid(), documentId, memberId }],
         }));
@@ -901,6 +912,8 @@ export const useVaultStore = create<VaultState>()(
       },
 
       revokeShare: (documentId, memberId) => {
+        const doc = get().documents.find((d) => d.id === documentId);
+        if (!doc || !canManageDocumentFamilyAccess(doc, get().members, get().user, get().documents)) return;
         set((s) => ({
           shareGrants: s.shareGrants.filter(
             (g) => !(g.documentId === documentId && g.memberId === memberId),
@@ -910,6 +923,7 @@ export const useVaultStore = create<VaultState>()(
       },
 
       revokeAllForMember: (memberId) => {
+        if (!canManageFamilyAccess(get().members, get().user)) return;
         set((s) => ({
           shareGrants: s.shareGrants.filter((g) => g.memberId !== memberId),
         }));
@@ -1266,8 +1280,15 @@ export const useVaultStore = create<VaultState>()(
     {
       name: 'prevault-vault',
       version: 5,
+      partialize: (state) => {
+        const { familyHomeView: _familyHomeView, ...persistedSettings } = state.settings;
+        return { ...state, settings: persistedSettings };
+      },
       onRehydrateStorage: () => (state) => {
         queueMicrotask(() => {
+          useVaultStore.setState((s) => ({
+            settings: { ...s.settings, familyHomeView: 'me' },
+          }));
           if (state?.user && state.settings?.biometricLockEnabled) {
             useVaultStore.setState({ locked: true });
           }

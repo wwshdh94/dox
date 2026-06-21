@@ -85,7 +85,7 @@ export function Header({
                 value={familyHomeView}
                 onChange={setFamilyView}
                 options={[
-                  { value: 'me', label: 'Me' },
+                  { value: 'me', label: 'Mine' },
                   { value: 'family', label: 'Family' },
                 ]}
               />

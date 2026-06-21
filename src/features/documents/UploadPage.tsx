@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
@@ -7,7 +7,8 @@ import { LoadingOverlay } from '@/components/LoadingScreen';
 import { Input, RadioGroup, Select, Textarea } from '@/components/Input';
 import { extractOnDevice, findDuplicate } from '@/lib/ocr';
 import { readFileDataUrl } from '@/lib/files';
-import { inferDocTags, CATEGORY_LABELS, DOC_CATEGORIES, DOC_DOMAINS, DOMAIN_LABELS, categoryForDocType, resolveDocTags } from '@/lib/docTags';
+import { inferDocTags, CATEGORY_LABELS, DOMAIN_LABELS, categoryForDocType, categoriesForDocType, coerceCategoryForDocType, coerceDomainForDocType, domainsForDocType, defaultDomainForDocType, resolveDocTags } from '@/lib/docTags';
+import { memberSelectLabel } from '@/lib/family';
 import { emptyFieldsFor, fieldSchemaFor, normalizeDocFields, documentExpiryFromFields, computeWarrantyEndDate, usesFieldBasedExpiry } from '@/lib/docFields';
 import { formatDate } from '@/lib/format';
 import { uploadBackPath } from '@/lib/navigation';
@@ -102,11 +103,10 @@ export function UploadPage() {
   const [category, setCategory] = useState<DocCategory>('identity');
   const [editAssetId, setEditAssetId] = useState('');
   const navigate = useNavigate();
-  const location = useLocation();
   const backTo = isEdit ? `/documents/${editId}` : uploadBackPath(params);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const pickerResolvedRef = useRef(false);
+  const autoOpenedPickerRef = useRef(false);
   const verifiedCount = countVerifiedDocuments(documents);
   const uploadsLeft = user ? remainingUploads(user, verifiedCount) : null;
   const assetSlotsLeft = user ? remainingAssetSlots(user, assets.length) : null;
@@ -130,8 +130,8 @@ export function UploadPage() {
     setNeedsValidation(false);
     setOcrLoading(false);
     const tags = resolveDocTags(editingDoc);
-    setDomain(tags.domain);
-    setCategory(tags.category);
+    setDomain(coerceDomainForDocType(editingDoc.docType, tags.domain));
+    setCategory(coerceCategoryForDocType(editingDoc.docType));
     setEditAssetId(editingDoc.assetId ?? '');
     if (editingDoc.memberId) setMemberId(editingDoc.memberId);
     if (editingDoc.docType === 'purchase_receipt') {
@@ -178,24 +178,16 @@ export function UploadPage() {
     setWarrantyDuration('');
   }, [isPurchase, underWarranty]);
 
-  const goBackFromPicker = () => {
-    if (location.key !== 'default') {
-      navigate(-1);
-    } else {
-      navigate(backTo);
-    }
-  };
-
-  const handleInitialPick = (picked: File | null) => {
-    if (pickerResolvedRef.current) return;
-    pickerResolvedRef.current = true;
-    if (!picked) {
-      goBackFromPicker();
-      return;
-    }
+  const applyPickedFile = (picked: File) => {
     setFile(picked);
     setExtractMode('on_device');
     setTitle(picked.name.replace(/\.[^.]+$/, ''));
+  };
+
+  const handlePickInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0] ?? null;
+    e.target.value = '';
+    if (picked) applyPickedFile(picked);
   };
 
   const openFilePicker = () => {
@@ -203,44 +195,20 @@ export function UploadPage() {
     input?.click();
   };
 
-  const awaitingFile = step === 'pick' && !params.get('verify') && !isEdit && !file;
+  useEffect(() => {
+    autoOpenedPickerRef.current = false;
+  }, [isCamera]);
 
   useEffect(() => {
-    if (!awaitingFile) return;
+    if (step !== 'pick' || params.get('verify') || isEdit || file) return;
 
-    pickerResolvedRef.current = false;
     const input = isCamera ? cameraInputRef.current : fileInputRef.current;
-    if (!input) return;
+    if (!input || autoOpenedPickerRef.current) return;
 
-    const onChange = () => handleInitialPick(input.files?.[0] ?? null);
-    const onCancel = () => handleInitialPick(null);
-
-    const onWindowBlur = () => {
-      const onWindowFocus = () => {
-        window.setTimeout(() => {
-          if (!pickerResolvedRef.current && !input.files?.[0]) {
-            handleInitialPick(null);
-          }
-        }, 400);
-      };
-      window.addEventListener('focus', onWindowFocus, { once: true });
-    };
-
-    input.addEventListener('change', onChange);
-    input.addEventListener('cancel', onCancel);
-
-    const timer = window.setTimeout(() => {
-      window.addEventListener('blur', onWindowBlur, { once: true });
-      input.click();
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      input.removeEventListener('change', onChange);
-      input.removeEventListener('cancel', onCancel);
-      window.removeEventListener('blur', onWindowBlur);
-    };
-  }, [awaitingFile, isCamera, backTo, location.key]);
+    autoOpenedPickerRef.current = true;
+    const timer = window.setTimeout(() => input.click(), 150);
+    return () => clearTimeout(timer);
+  }, [step, isCamera, isEdit, file, params]);
 
   const stageForVerification = async (initialFields: Record<string, string>, docTitle: string) => {
     setLimitError('');
@@ -490,12 +458,13 @@ export function UploadPage() {
     setExpiryDate('');
     setDuplicate(null);
     setCategory(categoryForDocType(next));
-    const inferred = inferDocTags(next, {
-      memberId,
-      assetId: editAssetId || undefined,
-      uploadContext: domain === 'health' ? 'health' : undefined,
-    });
-    setDomain(inferred.domain);
+    setDomain(
+      defaultDomainForDocType(next, {
+        memberId,
+        assetId: editAssetId || undefined,
+        uploadContext: isHealth ? 'health' : undefined,
+      }),
+    );
     if (next === 'purchase_receipt') {
       setUnderWarranty('');
       setWarrantyDuration('');
@@ -533,6 +502,11 @@ export function UploadPage() {
       setOcrLoading(false);
     }
   };
+
+  const domainOptions = useMemo(() => domainsForDocType(docType), [docType]);
+  const categoryOptions = useMemo(() => categoriesForDocType(docType), [docType]);
+  const domainSelectDisabled = domainOptions.length <= 1;
+  const categorySelectDisabled = categoryOptions.length <= 1;
 
   const showAssetLink =
     domain === 'assets' || Boolean(editAssetId) || ASSET_DOC_TYPES.includes(docType);
@@ -580,68 +554,90 @@ export function UploadPage() {
         )}
         {step === 'pick' && !params.get('verify') && (
           <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const picked = e.target.files?.[0] ?? null;
-                if (awaitingFile) handleInitialPick(picked);
-                else if (picked) {
-                  setFile(picked);
-                  setTitle(picked.name.replace(/\.[^.]+$/, ''));
-                }
-                e.target.value = '';
-              }}
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const picked = e.target.files?.[0] ?? null;
-                if (awaitingFile) handleInitialPick(picked);
-                else if (picked) {
-                  setFile(picked);
-                  setTitle(picked.name.replace(/\.[^.]+$/, ''));
-                }
-                e.target.value = '';
-              }}
-            />
+            {!file ? (
+              <>
+                {isCamera ? (
+                  <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-accent/35 bg-accent-soft/50 p-6 text-center text-sm shadow-sm">
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handlePickInput}
+                    />
+                    <span className="text-4xl">📷</span>
+                    <p className="mt-3 font-medium text-text">Tap to open camera</p>
+                    <p className="mt-1 text-xs text-muted">Take a photo of your document</p>
+                  </label>
+                ) : (
+                  <label className="surface-panel flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-dashed border-border p-6 text-sm text-muted">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={handlePickInput}
+                    />
+                    Tap to choose photo or PDF
+                  </label>
+                )}
 
-            {awaitingFile ? (
-              <p className="py-12 text-center text-sm text-muted">
-                {isCamera ? 'Opening camera…' : 'Opening file picker…'}
-              </p>
+                {!isCamera && (
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs"
+                    onClick={() => {
+                      setFile(null);
+                      const next = new URLSearchParams(params);
+                      next.set('source', 'camera');
+                      navigate(`/upload?${next.toString()}`);
+                    }}
+                  >
+                    📷 Scan with camera instead
+                  </Button>
+                )}
+              </>
             ) : (
               <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={handlePickInput}
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handlePickInput}
+                />
                 <button
                   type="button"
                   onClick={openFilePicker}
                   className="surface-panel flex min-h-20 w-full cursor-pointer flex-col items-center justify-center border-2 border-dashed border-border p-4 text-center text-sm"
                 >
-                  <p className="font-medium text-text">{file?.name}</p>
+                  <p className="font-medium text-text">{file.name}</p>
                   <p className="mt-1 text-xs text-muted">Tap to choose a different file</p>
                 </button>
 
-            {!isCamera && (
-              <Button
-                variant="ghost"
-                className="w-full text-xs"
-                onClick={() => {
-                  pickerResolvedRef.current = false;
-                  setFile(null);
-                  const next = new URLSearchParams(params);
-                  next.set('source', 'camera');
-                  navigate(`/upload?${next.toString()}`);
-                }}
-              >
-                📷 Scan with camera instead
-              </Button>
-            )}
+                {!isCamera && (
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs"
+                    onClick={() => {
+                      setFile(null);
+                      const next = new URLSearchParams(params);
+                      next.set('source', 'camera');
+                      navigate(`/upload?${next.toString()}`);
+                    }}
+                  >
+                    📷 Scan with camera instead
+                  </Button>
+                )}
 
             <Select
               label="Document type"
@@ -660,7 +656,7 @@ export function UploadPage() {
             {!isPurchase && (
               <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
                 {members.map((m) => (
-                  <option key={m.id} value={m.id}>{m.displayName}</option>
+                  <option key={m.id} value={m.id}>{memberSelectLabel(m)}</option>
                 ))}
               </Select>
             )}
@@ -758,25 +754,27 @@ export function UploadPage() {
                 {docType !== 'purchase_receipt' && members.length > 0 && (
                   <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
                     {members.map((m) => (
-                      <option key={m.id} value={m.id}>{m.displayName}</option>
+                      <option key={m.id} value={m.id}>{memberSelectLabel(m)}</option>
                     ))}
                   </Select>
                 )}
                 <Select
                   label="Tab tag"
                   value={domain}
+                  disabled={domainSelectDisabled}
                   onChange={(e) => setDomain(e.target.value as DocDomain)}
                 >
-                  {DOC_DOMAINS.map((d) => (
+                  {domainOptions.map((d) => (
                     <option key={d} value={d}>{DOMAIN_LABELS[d]}</option>
                   ))}
                 </Select>
                 <Select
                   label="Category tag"
                   value={category}
+                  disabled={categorySelectDisabled}
                   onChange={(e) => setCategory(e.target.value as DocCategory)}
                 >
-                  {DOC_CATEGORIES.map((c) => (
+                  {categoryOptions.map((c) => (
                     <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
                   ))}
                 </Select>

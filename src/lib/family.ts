@@ -1,4 +1,4 @@
-import type { Asset, Document, FamilyMember, FamilyHomeView } from '@/types';
+import type { Asset, Document, FamilyMember, FamilyHomeView, User } from '@/types';
 
 export type { FamilyHomeView };
 
@@ -10,9 +10,35 @@ export function getOwnerMember(members: FamilyMember[]): FamilyMember | undefine
   );
 }
 
+/** Signed-in household member — match by email, else household owner account. */
+export function getSessionMember(
+  members: FamilyMember[],
+  user: User | null | undefined,
+): FamilyMember | undefined {
+  if (!user) return undefined;
+  const byEmail = members.find(
+    (m) => m.status !== 'disabled' && m.email?.toLowerCase() === user.email.toLowerCase(),
+  );
+  if (byEmail) return byEmail;
+  return getOwnerMember(members);
+}
+
+export function canManageFamilyAccess(
+  members: FamilyMember[],
+  user: User | null | undefined,
+): boolean {
+  return getSessionMember(members, user)?.role === 'owner';
+}
+
 export function getOtherFamilyMembers(members: FamilyMember[]): FamilyMember[] {
   const owner = getOwnerMember(members);
   return members.filter((m) => m.status !== 'disabled' && m.id !== owner?.id);
+}
+
+/** Label for member pickers — vault owner shows as Mine. */
+export function memberSelectLabel(member: FamilyMember): string {
+  if (member.role === 'owner') return 'Mine';
+  return member.displayName;
 }
 
 /** Two-letter initials from display name (e.g. Rahul Sharma → RS) */

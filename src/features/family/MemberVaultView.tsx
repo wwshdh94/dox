@@ -6,12 +6,15 @@ import { MemberAvatar } from '@/components/MemberAvatar';
 import { MemberDocStats } from '@/components/MemberDocStats';
 import { PendingVerificationBanner } from '@/components/PendingVerificationBanner';
 import { dismissExpiringBanner, isExpiringBannerDismissed } from '@/lib/expiringBanner';
+import { canViewDocument } from '@/lib/documentVisibility';
 import { isHealthDomainDoc } from '@/lib/docTags';
 import { memberFamilyDocStats } from '@/lib/memberStats';
 import { getExpiringDocuments, useVaultStore } from '@/store/useVaultStore';
 import { MemberVaultPanel } from '@/features/family/MemberVaultPanel';
 
 export function MemberVaultContent({ memberId }: { memberId: string }) {
+  const user = useVaultStore((s) => s.user);
+  const shareGrants = useVaultStore((s) => s.shareGrants);
   const members = useVaultStore((s) => s.members);
   const documents = useVaultStore((s) => s.documents);
   const member = useMemo(() => members.find((m) => m.id === memberId), [members, memberId]);
@@ -24,9 +27,14 @@ export function MemberVaultContent({ memberId }: { memberId: string }) {
     [documents, memberId],
   );
 
+  const visibleMemberDocs = useMemo(
+    () => memberDocs.filter((d) => canViewDocument(d, members, user, shareGrants, documents)),
+    [memberDocs, members, user, shareGrants],
+  );
+
   const expiringDocs = useMemo(
-    () => getExpiringDocuments(memberDocs),
-    [memberDocs],
+    () => getExpiringDocuments(visibleMemberDocs),
+    [visibleMemberDocs],
   );
 
   useEffect(() => {
@@ -81,6 +89,8 @@ export function MemberVaultContent({ memberId }: { memberId: string }) {
 }
 
 export function MemberVaultView({ memberId }: { memberId: string }) {
+  const user = useVaultStore((s) => s.user);
+  const shareGrants = useVaultStore((s) => s.shareGrants);
   const members = useVaultStore((s) => s.members);
   const documents = useVaultStore((s) => s.documents);
   const member = useMemo(() => members.find((m) => m.id === memberId), [members, memberId]);
@@ -88,8 +98,15 @@ export function MemberVaultView({ memberId }: { memberId: string }) {
   const navigate = useNavigate();
 
   const memberDocs = useMemo(
-    () => documents.filter((d) => !d.archivedAt && !isHealthDomainDoc(d) && d.memberId === memberId),
-    [documents, memberId],
+    () =>
+      documents.filter(
+        (d) =>
+          !d.archivedAt &&
+          !isHealthDomainDoc(d) &&
+          d.memberId === memberId &&
+          canViewDocument(d, members, user, shareGrants, documents),
+      ),
+    [documents, memberId, members, user, shareGrants],
   );
 
   const searchResults = useMemo(() => {

@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { getOwnerMember, getOtherFamilyMembers, memberInitials, docOwnerInitials } from './family';
-import type { Document, FamilyMember } from '@/types';
+import {
+  canManageFamilyAccess,
+  getOwnerMember,
+  getOtherFamilyMembers,
+  getSessionMember,
+  memberInitials,
+  memberSelectLabel,
+  docOwnerInitials,
+} from './family';
+import type { Document, FamilyMember, User } from '@/types';
 
 const members: FamilyMember[] = [
   {
     id: 'owner',
     displayName: 'Rahul',
+    email: 'rahul@gmail.com',
     relationship: 'Self',
     status: 'active',
     role: 'owner',
@@ -13,6 +22,7 @@ const members: FamilyMember[] = [
   {
     id: 'spouse',
     displayName: 'Priya',
+    email: 'priya@gmail.com',
     relationship: 'Spouse',
     status: 'active',
     role: 'viewer',
@@ -35,9 +45,44 @@ describe('family helpers', () => {
     expect(getOtherFamilyMembers(members).map((m) => m.id)).toEqual(['spouse']);
   });
 
+  it('resolves session member by email', () => {
+    const ownerUser: User = {
+      id: 'u1',
+      email: 'rahul@gmail.com',
+      name: 'Rahul',
+      plan: 'free',
+      referralCode: 'ABC',
+      referralUploads: 0,
+      referralQualified: false,
+    };
+    const viewerUser: User = { ...ownerUser, email: 'priya@gmail.com', name: 'Priya' };
+    expect(getSessionMember(members, ownerUser)?.id).toBe('owner');
+    expect(getSessionMember(members, viewerUser)?.id).toBe('spouse');
+  });
+
+  it('allows family access management for owner only', () => {
+    const ownerUser: User = {
+      id: 'u1',
+      email: 'rahul@gmail.com',
+      name: 'Rahul',
+      plan: 'free',
+      referralCode: 'ABC',
+      referralUploads: 0,
+      referralQualified: false,
+    };
+    const viewerUser: User = { ...ownerUser, email: 'priya@gmail.com', name: 'Priya' };
+    expect(canManageFamilyAccess(members, ownerUser)).toBe(true);
+    expect(canManageFamilyAccess(members, viewerUser)).toBe(false);
+  });
+
   it('derives member initials', () => {
     expect(memberInitials('Rahul Sharma')).toBe('RS');
     expect(memberInitials('Priya')).toBe('PR');
+  });
+
+  it('labels vault owner as Mine in member pickers', () => {
+    expect(memberSelectLabel(members[0]!)).toBe('Mine');
+    expect(memberSelectLabel(members[1]!)).toBe('Priya');
   });
 
   it('shows all initials for household docs', () => {

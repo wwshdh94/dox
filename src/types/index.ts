@@ -73,6 +73,10 @@ export interface FamilyMember {
   avatarUrl?: string;
   /** Used for portrait icon when no photo is uploaded. */
   gender?: MemberGender;
+  /** Parent/guardian for Son, Daughter, Child — document access for minors. */
+  parentMemberId?: string;
+  /** Optional DOB when not yet inferred from identity documents. */
+  dateOfBirth?: string;
   healthSummary?: HealthSummary;
   /** Token for app invite link */
   inviteToken?: string;

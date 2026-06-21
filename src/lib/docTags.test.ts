@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   inferDocTags,
+  domainsForDocType,
+  categoriesForDocType,
+  coerceDomainForDocType,
   isFamilyDomainDoc,
   isHealthDomainDoc,
   isAssetsDomainDoc,
@@ -30,6 +33,15 @@ describe('docTags', () => {
       domain: 'assets',
       category: 'vehicle',
     });
+  });
+
+  it('limits tab and category options by document type', () => {
+    expect(domainsForDocType('passport')).toEqual(['family']);
+    expect(domainsForDocType('lab_report')).toEqual(['health']);
+    expect(domainsForDocType('vehicle_rc')).toEqual(['family', 'assets']);
+    expect(categoriesForDocType('passport')).toEqual(['identity']);
+    expect(categoriesForDocType('vehicle_rc')).toEqual(['vehicle']);
+    expect(coerceDomainForDocType('passport', 'health')).toBe('family');
   });
 
   it('filters member docs by domain', () => {

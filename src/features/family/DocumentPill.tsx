@@ -4,7 +4,7 @@ import { Card } from '@/components/Card';
 import { DocTypeIcon } from '@/components/DocTypeIcon';
 import { ExpiryChip } from '@/components/ExpiryChip';
 import { resolveDocTags } from '@/lib/docTags';
-import { primaryRevealField, primaryRevealValue, normalizeDocFields } from '@/lib/docFields';
+import { primaryRevealValue, normalizeDocFields } from '@/lib/docFields';
 import { maskAadhaar, maskValue } from '@/lib/format';
 import { useVaultStore } from '@/store/useVaultStore';
 import type { Document } from '@/types';
@@ -56,11 +56,9 @@ export function DocumentPill({
 }) {
   const locked = useVaultStore((s) => s.locked);
   const biometricLockEnabled = useVaultStore((s) => s.settings.biometricLockEnabled);
-  const logActivity = useVaultStore((s) => s.logActivity);
   const navigate = useNavigate();
   const [revealed, setRevealed] = useState(false);
 
-  const fieldKey = primaryRevealField(document.docType);
   const value = primaryRevealValue(
     document.docType,
     normalizeDocFields(document.docType, document.fields),
@@ -75,18 +73,22 @@ export function DocumentPill({
     setRevealed((v) => !v);
   };
 
-  const copyRevealed = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!value || !revealed || (biometricLockEnabled && locked)) return;
-    void navigator.clipboard.writeText(value);
-    if (fieldKey) logActivity('copied_field', { field: fieldKey }, document.id);
-  };
-
   const tags = resolveDocTags(document);
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex items-stretch">
+      <div
+        role="button"
+        tabIndex={0}
+        className="flex cursor-pointer items-stretch text-left outline-none"
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+      >
         <DocTypeIcon
           docType={document.docType}
           category={tags.category}
@@ -98,41 +100,25 @@ export function DocumentPill({
         <div
           className={`flex min-w-0 flex-1 flex-col justify-center ${compact ? 'gap-0 px-1.5 py-0.5' : 'gap-0.5 px-2 py-1'}`}
         >
-          <div
-            role="button"
-            tabIndex={0}
-            className="cursor-pointer text-left outline-none"
-            onClick={onOpen}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpen();
-              }
-            }}
-          >
-            <div className={`flex items-center justify-between ${compact ? 'gap-1' : 'gap-1.5'}`}>
-              <p
-                className={`min-w-0 truncate font-medium leading-tight ${compact ? 'text-xs' : 'text-sm'}`}
-              >
-                {document.title}
-              </p>
-              {document.expiryDate ? (
-                <span className="shrink-0">
-                  <ExpiryChip date={document.expiryDate} compact tiny={compact} />
-                </span>
-              ) : null}
-            </div>
+          <div className={`flex items-center justify-between ${compact ? 'gap-1' : 'gap-1.5'}`}>
+            <p
+              className={`min-w-0 truncate font-medium leading-tight ${compact ? 'text-xs' : 'text-sm'}`}
+            >
+              {document.title}
+            </p>
+            {document.expiryDate ? (
+              <span className="shrink-0">
+                <ExpiryChip date={document.expiryDate} compact tiny={compact} />
+              </span>
+            ) : null}
           </div>
           {value ? (
             <div className="flex items-center">
-              <button
-                type="button"
-                className={`truncate text-left font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}
-                onClick={revealed ? copyRevealed : toggleReveal}
-                title={revealed ? 'Tap to copy' : undefined}
+              <span
+                className={`truncate font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}
               >
                 {revealed ? value : maskField(document.docType, value)}
-              </button>
+              </span>
               <button
                 type="button"
                 onClick={toggleReveal}
