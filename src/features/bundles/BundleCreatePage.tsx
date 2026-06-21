@@ -43,8 +43,9 @@ export function BundleCreatePage() {
   const showAllDocs = !memberId;
 
   const filteredDocs = useMemo(() => {
-    if (!memberId) return documents;
-    return documents.filter((d) => !d.memberId || d.memberId === memberId);
+    const visible = documents.filter((d) => !d.archivedAt);
+    if (!memberId) return visible;
+    return visible.filter((d) => !d.memberId || d.memberId === memberId);
   }, [documents, memberId]);
 
   const toggle = (id: string) => {

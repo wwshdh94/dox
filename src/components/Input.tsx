@@ -1,12 +1,20 @@
 import type { ReactNode } from 'react';
 
+const defaultLabelClass = 'text-xs font-semibold tracking-wide text-muted';
+
 export function Input({
   label,
+  labelClassName = defaultLabelClass,
+  wrapperClassName = 'space-y-2',
   ...props
-}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  label: string;
+  labelClassName?: string;
+  wrapperClassName?: string;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <label className="block space-y-2">
-      <span className="text-xs font-semibold tracking-wide text-muted">{label}</span>
+    <label className={`block ${wrapperClassName}`}>
+      <span className={labelClassName}>{label}</span>
       <input
         className="min-h-11 w-full rounded-2xl border border-border bg-surface-elevated px-4 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-muted/60 focus:border-accent focus:ring-2 focus:ring-accent-soft"
         {...props}
@@ -17,11 +25,12 @@ export function Input({
 
 export function Textarea({
   label,
+  labelClassName = defaultLabelClass,
   ...props
-}: { label: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+}: { label: string; labelClassName?: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <label className="block space-y-2">
-      <span className="text-xs font-semibold tracking-wide text-muted">{label}</span>
+      <span className={labelClassName}>{label}</span>
       <textarea
         className="min-h-28 w-full rounded-2xl border border-border bg-surface-elevated px-4 py-3 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-muted/60 focus:border-accent focus:ring-2 focus:ring-accent-soft"
         {...props}
@@ -32,12 +41,19 @@ export function Textarea({
 
 export function Select({
   label,
+  labelClassName = defaultLabelClass,
+  wrapperClassName = 'space-y-2',
   children,
   ...props
-}: { label: string; children: ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+}: {
+  label: string;
+  labelClassName?: string;
+  wrapperClassName?: string;
+  children: ReactNode;
+} & React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <label className="block space-y-2">
-      <span className="text-xs font-semibold tracking-wide text-muted">{label}</span>
+    <label className={`block ${wrapperClassName}`}>
+      <span className={labelClassName}>{label}</span>
       <select
         className="min-h-11 w-full rounded-2xl border border-border bg-surface-elevated px-4 text-sm text-text shadow-sm outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent-soft"
         {...props}

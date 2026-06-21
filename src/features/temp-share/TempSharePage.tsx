@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useVaultStore } from '@/store/useVaultStore';
+import { fieldLabelFor } from '@/lib/docFields';
 
 export function TempSharePage() {
   const { token } = useParams<{ token: string }>();
@@ -27,10 +28,12 @@ export function TempSharePage() {
       <div className="surface-panel p-4">
         <p className="font-medium">{doc.title}</p>
         {Object.entries(doc.fields).map(([k, v]) => (
-          <p key={k} className="mt-2 text-sm">
-            <span className="text-muted">{k}: </span>
-            {k.toLowerCase().includes('aadhaar') ? 'XXXX-XXXX-' + String(v).slice(-4) : String(v)}
-          </p>
+          v !== '' && v != null && (
+            <p key={k} className="mt-2 text-sm">
+              <span className="text-muted">{fieldLabelFor(doc.docType, k)}: </span>
+              {k.toLowerCase().includes('aadhaar') ? 'XXXX-XXXX-' + String(v).slice(-4) : String(v)}
+            </p>
+          )
         ))}
       </div>
       <p className="text-center text-xs text-muted">Watermark: view-only · not for redistribution</p>

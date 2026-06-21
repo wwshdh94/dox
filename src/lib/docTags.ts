@@ -109,9 +109,11 @@ export function docsForMemberByDomain(
   memberId: string,
   domain: DocDomain,
 ): Document[] {
-  return docs.filter((d) => d.memberId === memberId && resolveDocTags(d).domain === domain);
+  return docs.filter(
+    (d) => !d.archivedAt && d.memberId === memberId && resolveDocTags(d).domain === domain,
+  );
 }
 
 export function docsForAsset(docs: Document[], assetId: string): Document[] {
-  return docs.filter((d) => d.assetId === assetId && isAssetsDomainDoc(d));
+  return docs.filter((d) => !d.archivedAt && d.assetId === assetId && isAssetsDomainDoc(d));
 }

@@ -50,7 +50,7 @@ export function AssetsPage() {
           <section className="space-y-3">
             <p className="section-label">Vehicles</p>
             {vehicles.map((a) => {
-              const docs = documents.filter((d) => d.assetId === a.id && isAssetsDomainDoc(d));
+              const docs = documents.filter((d) => !d.archivedAt && d.assetId === a.id && isAssetsDomainDoc(d));
               const { valid, total } = vehicleValidity(docs);
               return (
                 <Card key={a.id} onClick={() => navigate(`/assets/${a.id}`)}>

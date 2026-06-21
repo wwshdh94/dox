@@ -33,6 +33,7 @@ export function FamilyPage() {
     const q = search.trim().toLowerCase();
     if (!q) return [];
     return documents.filter((d) => {
+      if (d.archivedAt) return false;
       if (isHealthDomainDoc(d)) return false;
       const member = members.find((m) => m.id === d.memberId);
       const haystack = [

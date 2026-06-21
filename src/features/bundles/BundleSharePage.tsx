@@ -25,7 +25,7 @@ export function BundleSharePage() {
   const expired = link && new Date(link.expiresAt) < new Date();
   const bundle = link ? bundles.find((b) => b.id === link.bundleId) : undefined;
   const bundleDocs = useMemo(
-    () => (bundle ? documents.filter((d) => bundle.documentIds.includes(d.id)) : []),
+    () => (bundle ? documents.filter((d) => !d.archivedAt && bundle.documentIds.includes(d.id)) : []),
     [bundle, documents],
   );
 

@@ -1,13 +1,11 @@
 import type { Document, DocType } from '@/types';
-
-const DATE_RE = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g;
-const AMOUNT_RE = /(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{2})?)/i;
-const PHONE_RE = /(?:\+91[\s-]?)?[6-9]\d{9}/;
+import { emptyFieldsFor, extractExpiryDate, normalizeDocFields } from '@/lib/docFields';
 
 export interface OcrResult {
   rawText: string;
   confidence: number;
   fields: Record<string, string | number>;
+  expiryDate?: string;
 }
 
 /** Mock on-device OCR — regex heuristics, no cloud */
@@ -18,73 +16,110 @@ export async function extractOnDevice(
   await new Promise((r) => setTimeout(r, 400));
 
   const base = fileName.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-  const fields: Record<string, string | number> = {};
+  const raw: Record<string, string | number> = { ...emptyFieldsFor(docType) };
   let rawText = `Scanned: ${base}`;
 
   if (docType === 'purchase_receipt') {
     const amountMatch = base.match(/(\d{5,7})/);
-    fields.productName = base.includes('mac') ? 'MacBook Pro' : base.slice(0, 40) || 'Product';
-    fields.amount = amountMatch ? Number(amountMatch[1]) : 0;
-    fields.storeName = base.toLowerCase().includes('imagine') ? 'Imagine Apple Reseller' : 'Store';
-    fields.purchaseDate = new Date().toISOString().slice(0, 10);
-    rawText += '\n₹' + (fields.amount || '0');
-  } else if (docType === 'vehicle_rc' || docType === 'vehicle_insurance') {
+    raw.productName = base.includes('mac') ? 'MacBook Pro' : base.slice(0, 40) || 'Product';
+    raw.amount = amountMatch ? Number(amountMatch[1]) : 0;
+    raw.storeName = base.toLowerCase().includes('imagine') ? 'Imagine Apple Reseller' : 'Store';
+    raw.purchaseDate = new Date().toISOString().slice(0, 10);
+    rawText += '\n₹' + (raw.amount || '0');
+  } else if (docType === 'vehicle_rc') {
     const reg = base.match(/[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}/i);
-    fields.registrationNumber = reg ? reg[0].toUpperCase() : '';
-    fields.ownerName = 'Owner';
-    const future = new Date();
-    future.setFullYear(future.getFullYear() + 1);
-    fields.expiryDate = future.toISOString().slice(0, 10);
+    raw.registrationNumber = reg ? reg[0].toUpperCase() : '';
+    raw.ownerName = 'Owner';
+    raw.expiryDate = yearAhead();
+  } else if (docType === 'vehicle_puc') {
+    const reg = base.match(/[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}/i);
+    raw.registrationNumber = reg ? reg[0].toUpperCase() : '';
+    raw.validTill = monthsAhead(6);
+  } else if (docType === 'vehicle_insurance') {
+    const reg = base.match(/[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}/i);
+    raw.registrationNumber = reg ? reg[0].toUpperCase() : '';
+    raw.insurer = 'HDFC ERGO';
+    raw.policyNumber = 'POL' + Math.floor(100000 + Math.random() * 900000);
+    raw.renewalDate = yearAhead();
   } else if (docType === 'passport') {
-    fields.passportNumber = 'Z' + Math.floor(1000000 + Math.random() * 9000000);
-    const future = new Date();
-    future.setFullYear(future.getFullYear() + 5);
-    fields.expiryDate = future.toISOString().slice(0, 10);
-    fields.fullName = 'Passport Holder';
+    raw.passportNumber = 'Z' + Math.floor(1000000 + Math.random() * 9000000);
+    raw.dateOfIssue = yearsAgo(5);
+    raw.expiryDate = yearsAhead(5);
+    raw.fullName = 'Passport Holder';
+  } else if (docType === 'pan') {
+    raw.panNumber = 'ABCDE1234F';
+    raw.fullName = 'PAN Holder';
+  } else if (docType === 'aadhaar') {
+    raw.aadhaarNumber = '123456789012';
+    raw.fullName = 'Aadhaar Holder';
+    raw.dateOfBirth = '1990-01-01';
+    raw.fathersName = 'Father Name';
   } else if (docType === 'health_insurance') {
-    fields.insurer = base.toLowerCase().includes('star') ? 'Star Health' : 'Health insurer';
-    fields.policyNumber = 'SH-' + Math.floor(100000 + Math.random() * 900000);
-    fields.sumInsured = '500000';
-    const future = new Date();
-    future.setMonth(future.getMonth() + 8);
-    fields.expiryDate = future.toISOString().slice(0, 10);
+    raw.insurer = base.toLowerCase().includes('star') ? 'Star Health' : 'Health insurer';
+    raw.policyNumber = 'SH-' + Math.floor(100000 + Math.random() * 900000);
+    raw.sumInsured = '500000';
+    raw.renewalDate = monthsAhead(8);
   } else if (docType === 'lab_report') {
-    fields.labName = 'Thyrocare';
-    fields.testDate = new Date().toISOString().slice(0, 10);
+    raw.labName = 'Thyrocare';
+    raw.testDate = new Date().toISOString().slice(0, 10);
   } else if (docType === 'prescription') {
-    fields.doctorName = 'Dr. Sharma';
-    fields.prescribedDate = new Date().toISOString().slice(0, 10);
+    raw.doctorName = 'Dr. Sharma';
+    raw.prescribedDate = new Date().toISOString().slice(0, 10);
   } else if (docType === 'vaccination') {
-    fields.vaccine = 'Covishield';
-    fields.dose = 'Booster';
-    const future = new Date();
-    future.setFullYear(future.getFullYear() + 1);
-    fields.expiryDate = future.toISOString().slice(0, 10);
+    raw.vaccine = 'Covishield';
+    raw.dose = 'Booster';
+    raw.expiryDate = yearAhead();
+  } else if (docType === 'medical_bill') {
+    raw.provider = 'City Hospital';
+    raw.amount = 2500;
+    raw.billDate = new Date().toISOString().slice(0, 10);
+  } else if (docType === 'discharge_summary') {
+    raw.hospital = 'City Hospital';
+    raw.dischargeDate = new Date().toISOString().slice(0, 10);
   } else if (docType === 'insurance') {
-    fields.provider = 'Insurance Co';
-    fields.policyNumber = 'POL' + Math.floor(100000 + Math.random() * 900000);
-    const future = new Date();
-    future.setMonth(future.getMonth() + 6);
-    fields.expiryDate = future.toISOString().slice(0, 10);
+    raw.provider = 'Insurance Co';
+    raw.policyNumber = 'POL' + Math.floor(100000 + Math.random() * 900000);
+    raw.premiumDue = monthsAhead(6);
+    raw.renewalDate = monthsAhead(6);
+  } else if (docType === 'warranty') {
+    raw.productName = base.slice(0, 40) || 'Product';
+    raw.warrantyUntil = yearAhead();
   }
 
-  const amountFromText = rawText.match(AMOUNT_RE);
-  if (amountFromText && !fields.amount) {
-    fields.amount = Number(amountFromText[1].replace(/,/g, ''));
-  }
+  const expiryDate = extractExpiryDate(docType, raw);
+  const fields = normalizeDocFields(docType, raw);
+  const filled = Object.values(fields).filter((v) => v !== '').length;
 
-  const phone = rawText.match(PHONE_RE);
-  if (phone) fields.storePhone = phone[0];
+  return {
+    rawText,
+    confidence: filled > 1 ? 0.75 : 0.45,
+    fields,
+    expiryDate,
+  };
+}
 
-  DATE_RE.lastIndex = 0;
-  const dateMatch = DATE_RE.exec(rawText);
-  if (dateMatch && !fields.purchaseDate) {
-    const [, d, m, y] = dateMatch;
-    const year = y.length === 2 ? `20${y}` : y;
-    fields.purchaseDate = `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
+function yearAhead(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
-  return { rawText, confidence: Object.keys(fields).length > 2 ? 0.75 : 0.45, fields };
+function yearsAhead(n: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function yearsAgo(n: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function monthsAhead(n: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 export function findDuplicate(

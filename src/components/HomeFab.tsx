@@ -100,7 +100,7 @@ function QuickNoteModal({
       domain: 'family',
       category: 'other',
       memberId: context === 'family' ? memberId || undefined : undefined,
-      fields: { type: 'note' },
+      fields: {},
       notes: note.trim(),
       verificationStatus: 'verified',
     });

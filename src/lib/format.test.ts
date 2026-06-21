@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysUntil, expiryStatus, formatINR, maskAadhaar } from './format';
+import { daysUntil, expiryStatus, formatINR, isValidEmail, maskAadhaar } from './format';
 
 describe('format', () => {
   it('formats INR', () => {
@@ -24,5 +24,11 @@ describe('format', () => {
 
   it('masks aadhaar', () => {
     expect(maskAadhaar('123456789012')).toBe('XXXX-XXXX-9012');
+  });
+
+  it('validates email format', () => {
+    expect(isValidEmail('name@example.com')).toBe(true);
+    expect(isValidEmail('bad@')).toBe(false);
+    expect(isValidEmail('not-an-email')).toBe(false);
   });
 });

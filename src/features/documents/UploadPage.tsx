@@ -3,10 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
-import { Input, RadioGroup, Select } from '@/components/Input';
+import { LoadingOverlay } from '@/components/LoadingScreen';
+import { Input, RadioGroup, Select, Textarea } from '@/components/Input';
 import { extractOnDevice, findDuplicate } from '@/lib/ocr';
 import { readFileDataUrl } from '@/lib/files';
-import { inferDocTags } from '@/lib/docTags';
+import { inferDocTags, CATEGORY_LABELS, DOC_CATEGORIES, DOC_DOMAINS, DOMAIN_LABELS, categoryForDocType, resolveDocTags } from '@/lib/docTags';
+import { emptyFieldsFor, fieldSchemaFor, normalizeDocFields, documentExpiryFromFields, computeWarrantyEndDate, usesFieldBasedExpiry } from '@/lib/docFields';
+import { formatDate } from '@/lib/format';
 import { uploadBackPath } from '@/lib/navigation';
 import { canUploadDocument, remainingUploads } from '@/lib/referrals';
 import {
@@ -20,9 +23,36 @@ import {
 } from '@/lib/verificationQueue';
 import { checkCanAddDocument } from '@/lib/documentLimits';
 import { useVaultStore } from '@/store/useVaultStore';
-import type { DocType } from '@/types';
+import type { DocCategory, DocDomain, DocType } from '@/types';
 
 type ExtractMode = 'manual' | 'on_device' | 'cloud';
+
+const ALL_DOC_TYPES: { value: DocType; label: string }[] = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'pan', label: 'PAN' },
+  { value: 'aadhaar', label: 'Aadhaar' },
+  { value: 'vehicle_rc', label: 'Vehicle RC' },
+  { value: 'vehicle_puc', label: 'PUC' },
+  { value: 'vehicle_insurance', label: 'Vehicle insurance' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'health_insurance', label: 'Health insurance' },
+  { value: 'lab_report', label: 'Lab report' },
+  { value: 'prescription', label: 'Prescription' },
+  { value: 'vaccination', label: 'Vaccination' },
+  { value: 'medical_bill', label: 'Medical bill' },
+  { value: 'discharge_summary', label: 'Discharge summary' },
+  { value: 'purchase_receipt', label: 'Purchase / Invoice' },
+  { value: 'warranty', label: 'Warranty card' },
+  { value: 'other', label: 'Other' },
+];
+
+const ASSET_DOC_TYPES: DocType[] = [
+  'vehicle_rc',
+  'vehicle_puc',
+  'vehicle_insurance',
+  'purchase_receipt',
+  'warranty',
+];
 
 export function UploadPage() {
   const [params] = useSearchParams();
@@ -32,14 +62,18 @@ export function UploadPage() {
   const settings = useVaultStore((s) => s.settings);
   const user = useVaultStore((s) => s.user);
   const addDocument = useVaultStore((s) => s.addDocument);
+  const updateDocument = useVaultStore((s) => s.updateDocument);
   const verifyDocument = useVaultStore((s) => s.verifyDocument);
   const deleteDocument = useVaultStore((s) => s.deleteDocument);
   const addAsset = useVaultStore((s) => s.addAsset);
-  const updateAsset = useVaultStore((s) => s.updateAsset);
+
+  const editId = params.get('edit') ?? '';
+  const isEdit = Boolean(editId);
+  const editingDoc = isEdit ? documents.find((d) => d.id === editId) : undefined;
 
   const [file, setFile] = useState<File | null>(null);
   const [extractMode, setExtractMode] = useState<ExtractMode>('on_device');
-  const [step, setStep] = useState<'pick' | 'verify'>(params.get('verify') ? 'verify' : 'pick');
+  const [step, setStep] = useState<'pick' | 'verify'>(params.get('verify') || isEdit ? 'verify' : 'pick');
   const isHealth = params.get('context') === 'health';
   const [docType, setDocType] = useState<DocType>(
     params.get('type') === 'purchase'
@@ -50,14 +84,25 @@ export function UploadPage() {
   );
   const [memberId, setMemberId] = useState(params.get('member') ?? members[0]?.id ?? '');
   const [assetId] = useState(params.get('asset') ?? '');
-  const [fields, setFields] = useState<Record<string, string>>({});
+  const [fields, setFields] = useState<Record<string, string>>(() => emptyFieldsFor(docType));
   const [title, setTitle] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [underWarranty, setUnderWarranty] = useState<'yes' | 'no' | ''>('');
+  const [warrantyDuration, setWarrantyDuration] = useState('');
+  const [warrantyUnit, setWarrantyUnit] = useState<'months' | 'years'>('years');
   const [duplicate, setDuplicate] = useState<string | null>(null);
   const [limitError, setLimitError] = useState('');
   const [stagedDocId, setStagedDocId] = useState<string | null>(params.get('verify'));
+  const [replacedFile, setReplacedFile] = useState(false);
+  const [needsValidation, setNeedsValidation] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [domain, setDomain] = useState<DocDomain>('family');
+  const [category, setCategory] = useState<DocCategory>('identity');
+  const [editAssetId, setEditAssetId] = useState('');
   const navigate = useNavigate();
-  const backTo = uploadBackPath(params);
+  const backTo = isEdit ? `/documents/${editId}` : uploadBackPath(params);
   const verifiedCount = countVerifiedDocuments(documents);
   const uploadsLeft = user ? remainingUploads(user, verifiedCount) : null;
   const assetSlotsLeft = user ? remainingAssetSlots(user, assets.length) : null;
@@ -69,21 +114,73 @@ export function UploadPage() {
   const resumeDoc = stagedDocId ? documents.find((d) => d.id === stagedDocId) : undefined;
 
   useEffect(() => {
+    if (!isEdit) return;
+    if (!editingDoc) return;
+    setStep('verify');
+    setTitle(editingDoc.title);
+    setDocType(editingDoc.docType);
+    setExpiryDate(editingDoc.expiryDate ?? '');
+    setNotes(editingDoc.notes ?? '');
+    setFields(normalizeDocFields(editingDoc.docType, editingDoc.fields));
+    setReplacedFile(false);
+    setNeedsValidation(false);
+    setOcrLoading(false);
+    const tags = resolveDocTags(editingDoc);
+    setDomain(tags.domain);
+    setCategory(tags.category);
+    setEditAssetId(editingDoc.assetId ?? '');
+    if (editingDoc.memberId) setMemberId(editingDoc.memberId);
+    if (editingDoc.docType === 'purchase_receipt') {
+      setUnderWarranty(editingDoc.fields.warrantyUntil ? 'yes' : 'no');
+    } else {
+      setUnderWarranty('');
+    }
+  }, [isEdit, editingDoc?.id]);
+
+  useEffect(() => {
     if (!resumeDoc) return;
     setStep('verify');
     setTitle(resumeDoc.title);
     setExpiryDate(resumeDoc.expiryDate ?? '');
-    const mapped: Record<string, string> = {};
-    Object.entries(resumeDoc.fields).forEach(([k, v]) => {
-      mapped[k] = String(v ?? '');
-    });
-    setFields(mapped);
+    setNotes(resumeDoc.notes ?? '');
+    setFields(normalizeDocFields(resumeDoc.docType, resumeDoc.fields));
+    if (resumeDoc.docType === 'purchase_receipt') {
+      if (resumeDoc.fields.warrantyUntil) {
+        setUnderWarranty('yes');
+      } else {
+        setUnderWarranty('no');
+      }
+    }
     if (resumeDoc.memberId) setMemberId(resumeDoc.memberId);
     if (resumeDoc.docType) setDocType(resumeDoc.docType);
   }, [resumeDoc?.id]);
 
+  useEffect(() => {
+    if (!isPurchase || underWarranty !== 'yes' || !warrantyDuration) return;
+    const until = computeWarrantyEndDate(
+      fields.purchaseDate,
+      Number(warrantyDuration),
+      warrantyUnit,
+    );
+    if (!until) return;
+    setFields((prev) => ({ ...prev, warrantyUntil: until }));
+    setExpiryDate(until);
+  }, [isPurchase, underWarranty, warrantyDuration, warrantyUnit, fields.purchaseDate]);
+
+  useEffect(() => {
+    if (!isPurchase || underWarranty !== 'no') return;
+    setFields((prev) => ({ ...prev, warrantyUntil: '' }));
+    setExpiryDate('');
+    setWarrantyDuration('');
+  }, [isPurchase, underWarranty]);
+
   const stageForVerification = async (initialFields: Record<string, string>, docTitle: string) => {
     setLimitError('');
+    if (isEdit) {
+      // Edit mode does not create a new pending document.
+      setStep('verify');
+      return;
+    }
     const gate = checkCanAddDocument(user, documents, assets, members, {
       memberId: isPurchase ? undefined : memberId || undefined,
       assetId: assetId || undefined,
@@ -107,6 +204,9 @@ export function UploadPage() {
       uploadContext: isHealth ? 'health' : undefined,
     });
 
+    const normalizedInitial = normalizeDocFields(docType, initialFields);
+    const stagedExpiry = documentExpiryFromFields(docType, normalizedInitial, expiryDate || undefined);
+
     const id = addDocument({
       title: docTitle || 'Document',
       docType,
@@ -114,8 +214,9 @@ export function UploadPage() {
       category: tags.category,
       memberId: isPurchase ? undefined : memberId || undefined,
       assetId: assetId || undefined,
-      expiryDate: expiryDate || undefined,
-      fields: initialFields,
+      expiryDate: stagedExpiry,
+      fields: normalizedInitial,
+      notes: notes.trim() || undefined,
       fileName: file?.name,
       fileDataUrl,
       verificationStatus: 'pending',
@@ -132,35 +233,94 @@ export function UploadPage() {
 
   const runExtract = async () => {
     if (!file) return;
-    const result = await extractOnDevice(file.name, docType);
-    const mapped: Record<string, string> = {};
-    Object.entries(result.fields).forEach(([k, v]) => {
-      mapped[k] = String(v);
-    });
-    setFields(mapped);
-    if (mapped.expiryDate) setExpiryDate(mapped.expiryDate);
-    const docTitle = mapped.productName
-      ? String(mapped.productName)
-      : file.name.replace(/\.[^.]+$/, '');
-    setTitle(docTitle);
+    setProcessing(true);
+    setLimitError('');
+    try {
+      const result = await extractOnDevice(file.name, docType);
+      const mapped = normalizeDocFields(docType, result.fields);
+      setFields(mapped);
+      if (result.expiryDate) setExpiryDate(result.expiryDate);
+      const docTitle = mapped.productName
+        ? mapped.productName
+        : file.name.replace(/\.[^.]+$/, '');
+      setTitle(docTitle);
 
-    const dup = findDuplicate(documents, docType, result.fields);
-    if (dup) setDuplicate(dup.title);
+      const dup = findDuplicate(documents, docType, result.fields);
+      if (dup) setDuplicate(dup.title);
 
-    if (result.confidence < 0.6 && extractMode !== 'cloud') {
-      // low confidence — user can switch to cloud on Pro
+      if (result.confidence < 0.6 && extractMode !== 'cloud') {
+        // low confidence — user can switch to cloud on Pro
+      }
+      await stageForVerification(mapped, docTitle);
+    } finally {
+      setProcessing(false);
     }
-    await stageForVerification(mapped, docTitle);
   };
 
   const continueManual = async () => {
-    const docTitle = title || file?.name.replace(/\.[^.]+$/, '') || 'Document';
-    setTitle(docTitle);
-    await stageForVerification(fields, docTitle);
+    setProcessing(true);
+    try {
+      const docTitle = title || file?.name.replace(/\.[^.]+$/, '') || 'Document';
+      setTitle(docTitle);
+      await stageForVerification(fields, docTitle);
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const save = async () => {
     setLimitError('');
+    if (isEdit) {
+      if (!editingDoc) {
+        setLimitError('Document not found.');
+        return;
+      }
+
+      const normalizedFields = normalizeDocFields(docType, fields);
+      const docExpiry = documentExpiryFromFields(docType, normalizedFields, expiryDate || undefined);
+
+      if (docType === 'purchase_receipt' && !underWarranty) {
+        setLimitError('Please confirm if this item is under warranty.');
+        return;
+      }
+      if (docType === 'purchase_receipt' && underWarranty === 'yes' && !normalizedFields.warrantyUntil) {
+        setLimitError('Enter warranty duration to calculate validity date.');
+        return;
+      }
+      if (replacedFile && !file) {
+        setLimitError('Choose a new file to replace.');
+        return;
+      }
+
+      let fileDataUrl: string | undefined;
+      if (file) fileDataUrl = await readFileDataUrl(file);
+
+      updateDocument(editingDoc.id, {
+        title: title || 'Document',
+        docType,
+        domain,
+        category,
+        memberId: docType === 'purchase_receipt' ? undefined : memberId || undefined,
+        assetId: editAssetId || undefined,
+        expiryDate: docExpiry,
+        fields: normalizedFields,
+        notes: notes.trim() || undefined,
+        verificationStatus: 'verified',
+        ...(file
+          ? {
+              fileName: file.name,
+              fileDataUrl,
+            }
+          : {}),
+      });
+
+      if (needsValidation || editingDoc.verificationStatus === 'pending') {
+        useVaultStore.getState().logActivity('verified', {}, editingDoc.id);
+      }
+
+      navigate(`/documents/${editingDoc.id}`);
+      return;
+    }
     if (!stagedDocId) {
       setLimitError('No document to verify.');
       return;
@@ -173,6 +333,18 @@ export function UploadPage() {
     }
 
     let finalAssetId = assetId;
+    const normalizedFields = normalizeDocFields(docType, fields);
+    const docExpiry = documentExpiryFromFields(docType, normalizedFields, expiryDate || undefined);
+
+    if (isPurchase && !underWarranty) {
+      setLimitError('Please confirm if this item is under warranty.');
+      return;
+    }
+
+    if (isPurchase && underWarranty === 'yes' && !normalizedFields.warrantyUntil) {
+      setLimitError('Enter warranty duration to calculate validity date.');
+      return;
+    }
 
     if (isPurchase && !finalAssetId) {
       if (!canAddAsset(user, assets.length)) {
@@ -184,13 +356,12 @@ export function UploadPage() {
         label: title || 'Purchase',
         ownedByMemberId: memberId || undefined,
         purchaseFields: {
-          productName: title,
-          amount: Number(fields.amount) || 0,
+          productName: normalizedFields.productName || title,
+          amount: Number(normalizedFields.amount) || 0,
           currency: 'INR',
-          purchaseDate: fields.purchaseDate || new Date().toISOString().slice(0, 10),
-          storeName: fields.storeName || 'Store',
-          storePhone: fields.storePhone,
-          warrantyUntil: expiryDate || fields.warrantyUntil,
+          purchaseDate: normalizedFields.purchaseDate || new Date().toISOString().slice(0, 10),
+          storeName: normalizedFields.storeName || 'Store',
+          warrantyUntil: normalizedFields.warrantyUntil || undefined,
         },
       });
       if (!finalAssetId) {
@@ -201,8 +372,9 @@ export function UploadPage() {
 
     const ok = verifyDocument(stagedDocId, {
       title: title || 'Document',
-      expiryDate: expiryDate || undefined,
-      fields,
+      expiryDate: docExpiry,
+      fields: normalizedFields,
+      notes: notes.trim() || undefined,
       ...(finalAssetId ? { assetId: finalAssetId } : {}),
       ...(memberId && !isPurchase ? { memberId } : {}),
     });
@@ -210,21 +382,6 @@ export function UploadPage() {
     if (!ok) {
       setLimitError('Could not verify document. Check your plan limits.');
       return;
-    }
-
-    if (finalAssetId && fields.warrantyUntil) {
-      updateAsset(finalAssetId, {
-        purchaseFields: {
-          ...(assets.find((a) => a.id === finalAssetId)?.purchaseFields ?? {
-            productName: title,
-            amount: 0,
-            currency: 'INR',
-            purchaseDate: new Date().toISOString().slice(0, 10),
-            storeName: '',
-          }),
-          warrantyUntil: expiryDate,
-        },
-      });
     }
 
     if (isHealth && memberId) {
@@ -259,12 +416,70 @@ export function UploadPage() {
     ];
   }, [isHealth]);
 
+  const handleEditDocTypeChange = (next: DocType) => {
+    setDocType(next);
+    setFields(emptyFieldsFor(next));
+    setExpiryDate('');
+    setDuplicate(null);
+    setCategory(categoryForDocType(next));
+    const inferred = inferDocTags(next, {
+      memberId,
+      assetId: editAssetId || undefined,
+      uploadContext: domain === 'health' ? 'health' : undefined,
+    });
+    setDomain(inferred.domain);
+    if (next === 'purchase_receipt') {
+      setUnderWarranty('');
+      setWarrantyDuration('');
+    } else {
+      setUnderWarranty('');
+    }
+  };
+
+  const replaceDocumentFile = async (picked: File | null) => {
+    setFile(picked);
+    setReplacedFile(Boolean(picked));
+    if (!picked) {
+      setNeedsValidation(false);
+      return;
+    }
+    setOcrLoading(true);
+    setLimitError('');
+    try {
+      const result = await extractOnDevice(picked.name, docType);
+      const mapped = normalizeDocFields(docType, result.fields);
+      setFields(mapped);
+      if (result.expiryDate) setExpiryDate(result.expiryDate);
+      const docTitle = mapped.productName
+        ? mapped.productName
+        : picked.name.replace(/\.[^.]+$/, '');
+      if (docTitle) setTitle(docTitle);
+      const dup = findDuplicate(
+        documents.filter((d) => d.id !== editId),
+        docType,
+        result.fields,
+      );
+      setDuplicate(dup?.title ?? null);
+      setNeedsValidation(true);
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const showAssetLink =
+    domain === 'assets' || Boolean(editAssetId) || ASSET_DOC_TYPES.includes(docType);
+
+  const pageTitle = isEdit
+    ? 'Edit document'
+    : isCamera
+      ? 'Scan document'
+      : isHealth
+        ? 'Add health record'
+        : 'Add document';
+
   return (
     <div className="min-h-full pb-28">
-      <Header
-        title={isCamera ? 'Scan document' : isHealth ? 'Add health record' : 'Add document'}
-        backFallback={backTo}
-      />
+      <Header title={pageTitle} backFallback={backTo} />
       <main className="page-main animate-fade-up space-y-4">
         {user?.plan === 'free' && uploadsLeft !== null && (
           <p className="text-xs text-muted">
@@ -345,7 +560,15 @@ export function UploadPage() {
               </Button>
             )}
 
-            <Select label="Document type" value={docType} onChange={(e) => setDocType(e.target.value as DocType)}>
+            <Select
+              label="Document type"
+              value={docType}
+              onChange={(e) => {
+                const next = e.target.value as DocType;
+                setDocType(next);
+                setFields(emptyFieldsFor(next));
+              }}
+            >
               {docTypes.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
@@ -399,7 +622,186 @@ export function UploadPage() {
           </>
         )}
 
-        {step === 'verify' && (
+        {step === 'verify' && isEdit && editingDoc && (
+          <>
+            <label className="surface-panel flex min-h-28 cursor-pointer flex-col items-center justify-center border-2 border-dashed border-accent/35 bg-accent-soft/30 p-4 text-center">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => void replaceDocumentFile(e.target.files?.[0] ?? null)}
+              />
+              <p className="text-sm font-semibold text-text">Replace document</p>
+              <p className="mt-1 text-xs text-muted">
+                {file
+                  ? `Selected: ${file.name}`
+                  : editingDoc.fileName
+                    ? `Current: ${editingDoc.fileName}`
+                    : 'Tap to choose a new photo or PDF'}
+              </p>
+              <p className="mt-1 text-[0.65rem] text-muted">OCR runs after you pick — review fields before saving</p>
+            </label>
+
+            {needsValidation && !ocrLoading && (
+              <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
+                <p className="font-medium text-text">Review scan results</p>
+                <p className="mt-1 text-xs text-muted">
+                  Check extracted fields below, update anything incorrect, then validate and save.
+                </p>
+              </div>
+            )}
+
+            {duplicate && (
+              <p className="rounded-xl bg-warning/10 p-3 text-sm text-warning">
+                Similar document exists: {duplicate}. Saving anyway.
+              </p>
+            )}
+
+            <section className="space-y-3">
+              <p className="section-label">Details</p>
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
+                <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                <Select
+                  label="Document type"
+                  value={docType}
+                  onChange={(e) => handleEditDocTypeChange(e.target.value as DocType)}
+                >
+                  {ALL_DOC_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </Select>
+                {docType !== 'purchase_receipt' && members.length > 0 && (
+                  <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>{m.displayName}</option>
+                    ))}
+                  </Select>
+                )}
+                <Select
+                  label="Tab tag"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value as DocDomain)}
+                >
+                  {DOC_DOMAINS.map((d) => (
+                    <option key={d} value={d}>{DOMAIN_LABELS[d]}</option>
+                  ))}
+                </Select>
+                <Select
+                  label="Category tag"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as DocCategory)}
+                >
+                  {DOC_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+                  ))}
+                </Select>
+                {showAssetLink && (
+                  <Select
+                    label="Linked asset"
+                    value={editAssetId}
+                    onChange={(e) => setEditAssetId(e.target.value)}
+                  >
+                    <option value="">None</option>
+                    {assets.map((a) => (
+                      <option key={a.id} value={a.id}>{a.label}</option>
+                    ))}
+                  </Select>
+                )}
+                {!usesFieldBasedExpiry(docType) && (
+                  <Input
+                    label="Expiry date"
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                  />
+                )}
+              </div>
+            </section>
+
+            {isPurchase && (
+              <section className="space-y-3">
+                <p className="section-label">Warranty</p>
+                <RadioGroup
+                  label="Under warranty?"
+                  name="underWarrantyEdit"
+                  value={underWarranty}
+                  onChange={(v) => setUnderWarranty(v as 'yes' | 'no')}
+                  options={[
+                    { value: 'yes', label: 'Yes' },
+                    { value: 'no', label: 'No' },
+                  ]}
+                />
+                {underWarranty === 'yes' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Warranty duration"
+                      type="number"
+                      min={1}
+                      value={warrantyDuration}
+                      onChange={(e) => setWarrantyDuration(e.target.value)}
+                    />
+                    <Select
+                      label="Unit"
+                      value={warrantyUnit}
+                      onChange={(e) => setWarrantyUnit(e.target.value as 'months' | 'years')}
+                    >
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                    </Select>
+                  </div>
+                )}
+                {underWarranty === 'yes' && fields.warrantyUntil && (
+                  <p className="text-sm text-muted">
+                    Warranty valid until:{' '}
+                    <span className="font-medium text-text">{formatDate(fields.warrantyUntil)}</span>
+                  </p>
+                )}
+              </section>
+            )}
+
+            {fieldSchemaFor(docType).filter((f) => !(isPurchase && f.key === 'warrantyUntil')).length > 0 && (
+              <section className="space-y-3">
+                <p className="section-label">Extracted fields</p>
+                <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
+                  {fieldSchemaFor(docType)
+                    .filter((f) => !(isPurchase && f.key === 'warrantyUntil'))
+                    .map((f) => (
+                      <Input
+                        key={f.key}
+                        label={f.label}
+                        type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
+                        value={fields[f.key] ?? ''}
+                        onChange={(e) => {
+                          const next = { ...fields, [f.key]: e.target.value };
+                          setFields(next);
+                          if (usesFieldBasedExpiry(docType)) {
+                            const mapped = documentExpiryFromFields(docType, next);
+                            if (mapped) setExpiryDate(mapped);
+                          }
+                        }}
+                      />
+                    ))}
+                </div>
+              </section>
+            )}
+
+            <Textarea
+              label="Notes (optional)"
+              placeholder="Extra details that are not standard fields for this document type"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+
+            <Button className="w-full" disabled={ocrLoading} onClick={() => void save()}>
+              {needsValidation ? 'Validate and save' : 'Save changes'}
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => navigate(backTo)}>
+              Cancel
+            </Button>
+          </>
+        )}
+
+        {step === 'verify' && !isEdit && (
           <>
             <p className="text-xs text-muted">
               Review extracted fields — your document is saved as pending until you confirm.
@@ -410,15 +812,71 @@ export function UploadPage() {
               </p>
             )}
             <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <Input label="Expiry date" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-            {Object.keys(fields).map((k) => (
+            {!usesFieldBasedExpiry(docType) && (
+              <Input label="Expiry date" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            )}
+            {isPurchase && (
+              <>
+                <RadioGroup
+                  label="Under warranty?"
+                  name="underWarranty"
+                  value={underWarranty}
+                  onChange={(v) => setUnderWarranty(v as 'yes' | 'no')}
+                  options={[
+                    { value: 'yes', label: 'Yes' },
+                    { value: 'no', label: 'No' },
+                  ]}
+                />
+                {underWarranty === 'yes' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label="Warranty duration"
+                      type="number"
+                      min={1}
+                      value={warrantyDuration}
+                      onChange={(e) => setWarrantyDuration(e.target.value)}
+                    />
+                    <Select
+                      label="Unit"
+                      value={warrantyUnit}
+                      onChange={(e) => setWarrantyUnit(e.target.value as 'months' | 'years')}
+                    >
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                    </Select>
+                  </div>
+                )}
+                {underWarranty === 'yes' && fields.warrantyUntil && (
+                  <p className="text-sm text-muted">
+                    Warranty valid until: <span className="font-medium text-text">{formatDate(fields.warrantyUntil)}</span>
+                  </p>
+                )}
+              </>
+            )}
+            {fieldSchemaFor(docType)
+              .filter((f) => !(isPurchase && f.key === 'warrantyUntil'))
+              .map((f) => (
               <Input
-                key={k}
-                label={k}
-                value={fields[k] ?? ''}
-                onChange={(e) => setFields({ ...fields, [k]: e.target.value })}
+                key={f.key}
+                label={f.label}
+                type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
+                value={fields[f.key] ?? ''}
+                onChange={(e) => {
+                  const next = { ...fields, [f.key]: e.target.value };
+                  setFields(next);
+                  if (usesFieldBasedExpiry(docType)) {
+                    const mapped = documentExpiryFromFields(docType, next);
+                    if (mapped) setExpiryDate(mapped);
+                  }
+                }}
               />
             ))}
+            <Textarea
+              label="Notes (optional)"
+              placeholder="Extra details that are not standard fields for this document type"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
             <Button className="w-full" onClick={() => void save()}>
               Confirm & save
             </Button>
@@ -440,6 +898,7 @@ export function UploadPage() {
         )}
       </main>
       <BottomNav />
+      <LoadingOverlay open={ocrLoading || processing} label={ocrLoading ? 'Scanning document…' : 'Processing…'} />
     </div>
   );
 }

@@ -109,6 +109,10 @@ export function activityLogRetentionDays(user: User | null): number {
 }
 
 export function formatShareDuration(hours: number): string {
+  if (hours < 1) {
+    const minutes = Math.round(hours * 60);
+    return `${minutes} min`;
+  }
   if (hours >= 168) return '7 days';
   if (hours >= 24) return '24 hr';
   return `${hours} hr`;

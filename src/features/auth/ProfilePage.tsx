@@ -47,7 +47,9 @@ export function ProfilePage() {
           <NavRow to="/profile/family">Family members</NavRow>
           <NavRow to="/profile/plan">{onPro ? 'Your plan' : 'Upgrade to Pro'}</NavRow>
           <NavRow to="/profile/settings">Settings</NavRow>
+          <NavRow to="/profile/activity">Activity & shares</NavRow>
           <NavRow to="/profile/security">Security Center</NavRow>
+          <NavRow to="/profile/archived">Archived</NavRow>
           <NavRow to="/profile/backup">Backup & restore</NavRow>
           <NavRow to="/profile/referrals">Referrals & rewards</NavRow>
           <NavRow to="/bundles">Shared bundles</NavRow>

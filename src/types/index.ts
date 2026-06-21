@@ -121,6 +121,8 @@ export interface Document {
   fields: DocFields;
   notes?: string;
   renewedAt?: string;
+  /** When archived, document is hidden from main tabs but kept intact. */
+  archivedAt?: string;
   fileName?: string;
   fileDataUrl?: string;
   /** pending = uploaded, awaiting user verification; verified = confirmed in vault */
@@ -140,6 +142,8 @@ export type ActivityEvent =
   | 'deleted'
   | 'copied_field'
   | 'renewed'
+  | 'archived'
+  | 'unarchived'
   | 'bundle_created'
   | 'bundle_updated'
   | 'bundle_shared'
@@ -172,6 +176,9 @@ export interface TempShareLink {
   viewCount: number;
   maxViews: number;
   status: 'active' | 'revoked' | 'expired';
+  createdAt?: string;
+  createdByMemberId?: string;
+  createdByName?: string;
 }
 
 /** Saved document bundle for repeated sharing (insurance, hospital, KYC, etc.) */
@@ -198,6 +205,8 @@ export interface BundleShareLink {
   maxViews: number;
   status: 'active' | 'revoked' | 'expired';
   createdAt: string;
+  createdByMemberId?: string;
+  createdByName?: string;
 }
 
 export interface VisitingCard {

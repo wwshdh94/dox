@@ -30,8 +30,10 @@ import {
   canAddMember,
   canCreateBundle,
   canCreateTempLink,
+  activityLogRetentionDays,
   tempLinkDurationHours,
 } from '@/lib/planLimits';
+import { countActiveTempLinks, isShareLinkExpired } from '@/lib/activityLog';
 import {
   checkCanAddDocument,
   checkCanVerifyDocument,
@@ -90,6 +92,8 @@ interface VaultState {
   updateDocument: (id: string, partial: Partial<Document>) => void;
   deleteDocument: (id: string) => void;
   markRenewed: (id: string) => void;
+  archiveDocument: (id: string) => void;
+  unarchiveDocument: (id: string) => void;
 
   logActivity: (
     event: ActivityLog['event'],
@@ -102,8 +106,13 @@ interface VaultState {
   revokeShare: (documentId: string, memberId: string) => void;
   revokeAllForMember: (memberId: string) => void;
 
-  createTempLink: (documentId: string) => TempShareLink | null;
+  createTempLink: (
+    documentId: string,
+    opts?: { hours?: number; permanent?: boolean },
+  ) => TempShareLink | null;
   revokeTempLink: (id: string) => void;
+  purgeExpiredShareLinks: () => void;
+  pruneActivityLogs: () => void;
 
   createBundle: (b: Omit<SharedBundle, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateBundle: (id: string, partial: Partial<Omit<SharedBundle, 'id' | 'createdAt'>>) => void;
@@ -132,6 +141,14 @@ const defaultSettings: AppSettings = {
   privacyMode: true,
   onboardingComplete: false,
 };
+
+function shareActor(state: Pick<VaultState, 'user' | 'members'>): { memberId?: string; name: string } {
+  const owner = state.members.find((m) => m.role === 'owner');
+  return {
+    memberId: owner?.id,
+    name: owner?.displayName ?? state.user?.name ?? 'You',
+  };
+}
 
 export const useVaultStore = create<VaultState>()(
   persist(
@@ -308,7 +325,12 @@ export const useVaultStore = create<VaultState>()(
             category: 'identity',
             memberId: selfId,
             expiryDate: passportExpiry.toISOString().slice(0, 10),
-            fields: { passportNumber: 'Z1234567', fullName: 'Rahul Sharma' },
+            fields: {
+              passportNumber: 'Z1234567',
+              fullName: 'Rahul Sharma',
+              dateOfIssue: '2015-06-01',
+              expiryDate: passportExpiry.toISOString().slice(0, 10),
+            },
             createdAt: now,
             updatedAt: now,
           },
@@ -343,7 +365,7 @@ export const useVaultStore = create<VaultState>()(
             category: 'vehicle',
             assetId: vehicleId,
             expiryDate: '2025-07-01',
-            fields: { registrationNumber: 'MH01AB1234' },
+            fields: { registrationNumber: 'MH01AB1234', validTill: '2025-07-01' },
             createdAt: now,
             updatedAt: now,
           },
@@ -355,7 +377,7 @@ export const useVaultStore = create<VaultState>()(
             category: 'vehicle',
             assetId: vehicleId,
             expiryDate: '2026-01-20',
-            fields: { policyNumber: 'POL882211', insurer: 'HDFC ERGO' },
+            fields: { policyNumber: 'POL882211', insurer: 'HDFC ERGO', renewalDate: '2026-01-20' },
             createdAt: now,
             updatedAt: now,
           },
@@ -367,7 +389,13 @@ export const useVaultStore = create<VaultState>()(
             category: 'purchase',
             assetId: purchaseId,
             expiryDate: '2026-06-12',
-            fields: { amount: 189900, storeName: 'Imagine Apple Reseller' },
+            fields: {
+              productName: 'MacBook Pro 14" M3',
+              amount: 189900,
+              storeName: 'Imagine Apple Reseller',
+              purchaseDate: '2025-06-12',
+              warrantyUntil: '2026-06-12',
+            },
             notes: 'Keep for AppleCare claim',
             createdAt: now,
             updatedAt: now,
@@ -380,7 +408,12 @@ export const useVaultStore = create<VaultState>()(
             category: 'health_medical',
             memberId: selfId,
             expiryDate: passportExpiry.toISOString().slice(0, 10),
-            fields: { policyNumber: 'SH-882910', insurer: 'Star Health', sumInsured: '500000' },
+            fields: {
+              policyNumber: 'SH-882910',
+              insurer: 'Star Health',
+              sumInsured: '500000',
+              renewalDate: passportExpiry.toISOString().slice(0, 10),
+            },
             createdAt: now,
             updatedAt: now,
           },
@@ -746,6 +779,26 @@ export const useVaultStore = create<VaultState>()(
         get().logActivity('renewed', {}, id);
       },
 
+      archiveDocument: (id) => {
+        const now = new Date().toISOString();
+        set((s) => ({
+          documents: s.documents.map((d) =>
+            d.id === id ? { ...d, archivedAt: now, updatedAt: now } : d,
+          ),
+        }));
+        get().logActivity('archived', {}, id);
+      },
+
+      unarchiveDocument: (id) => {
+        const now = new Date().toISOString();
+        set((s) => ({
+          documents: s.documents.map((d) =>
+            d.id === id ? { ...d, archivedAt: undefined, updatedAt: now } : d,
+          ),
+        }));
+        get().logActivity('unarchived', {}, id);
+      },
+
       logActivity: (event, metadata = {}, documentId, bundleId) => {
         if (event === 'viewed' && documentId) {
           const already = get().activities.some(
@@ -753,6 +806,14 @@ export const useVaultStore = create<VaultState>()(
           );
           if (already) return;
         }
+        const actor = shareActor(get());
+        const meta: Record<string, string | number | boolean> = {
+          ...metadata,
+          actorName: typeof metadata.actorName === 'string' ? metadata.actorName : actor.name,
+        };
+        if (actor.memberId) meta.actorMemberId = actor.memberId;
+        const retentionDays = activityLogRetentionDays(get().user);
+        const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
         set((s) => ({
           activities: [
             {
@@ -760,11 +821,13 @@ export const useVaultStore = create<VaultState>()(
               documentId,
               bundleId,
               event,
-              metadata,
+              metadata: meta,
               createdAt: new Date().toISOString(),
             },
             ...s.activities,
-          ].slice(0, 500),
+          ]
+            .filter((a) => new Date(a.createdAt).getTime() >= cutoff)
+            .slice(0, 500),
         }));
       },
 
@@ -790,12 +853,19 @@ export const useVaultStore = create<VaultState>()(
         }));
       },
 
-      createTempLink: (documentId) => {
+      createTempLink: (documentId, opts) => {
         const { user, tempLinks } = get();
-        const activeCount = tempLinks.filter((l) => l.status === 'active').length;
+        const activeCount = countActiveTempLinks(tempLinks);
         if (!canCreateTempLink(user, activeCount)) return null;
 
-        const hours = tempLinkDurationHours(user);
+        const maxHours = tempLinkDurationHours(user);
+        const permanent = Boolean(opts?.permanent && (user?.plan === 'pro' || user?.plan === 'family'));
+        const requestedHours = opts?.hours;
+        const hours =
+          permanent ? 24 * 365 * 50 : Math.max(0.25, Math.min(maxHours, requestedHours ?? maxHours));
+
+        const actor = shareActor(get());
+        const now = new Date().toISOString();
         const link: TempShareLink = {
           id: uid(),
           documentId,
@@ -805,18 +875,46 @@ export const useVaultStore = create<VaultState>()(
           viewCount: 0,
           maxViews: 10,
           status: 'active',
+          createdAt: now,
+          createdByMemberId: actor.memberId,
+          createdByName: actor.name,
         };
         set((s) => ({ tempLinks: [...s.tempLinks, link] }));
-        get().logActivity('temp_link_created', { linkId: link.id }, documentId);
+        get().logActivity(
+          'temp_link_created',
+          { linkId: link.id, createdByName: actor.name },
+          documentId,
+        );
         return link;
       },
 
       revokeTempLink: (id) => {
+        const link = get().tempLinks.find((l) => l.id === id);
         set((s) => ({
           tempLinks: s.tempLinks.map((l) =>
             l.id === id ? { ...l, status: 'revoked' as const } : l,
           ),
         }));
+        if (link) {
+          get().logActivity('revoked', { linkId: id, linkType: 'document' }, link.documentId);
+        }
+      },
+
+      purgeExpiredShareLinks: () => {
+        set((s) => ({
+          tempLinks: s.tempLinks.filter((l) => !isShareLinkExpired(l)),
+          bundleShareLinks: s.bundleShareLinks.filter((l) => !isShareLinkExpired(l)),
+        }));
+      },
+
+      pruneActivityLogs: () => {
+        const { user, activities } = get();
+        const retentionDays = activityLogRetentionDays(user);
+        const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+        const kept = activities.filter((a) => new Date(a.createdAt).getTime() >= cutoff);
+        if (kept.length !== activities.length) {
+          set({ activities: kept });
+        }
       },
 
       createBundle: (b) => {
@@ -858,6 +956,8 @@ export const useVaultStore = create<VaultState>()(
       createBundleShareLink: (bundleId, opts = {}) => {
         const bundle = get().bundles.find((b) => b.id === bundleId);
         const hours = opts.hours ?? bundleShareDurationHours(get().user);
+        const actor = shareActor(get());
+        const now = new Date().toISOString();
         const link: BundleShareLink = {
           id: uid(),
           bundleId,
@@ -869,7 +969,9 @@ export const useVaultStore = create<VaultState>()(
           viewCount: 0,
           maxViews: 10,
           status: 'active',
-          createdAt: new Date().toISOString(),
+          createdAt: now,
+          createdByMemberId: actor.memberId,
+          createdByName: actor.name,
         };
         set((s) => ({ bundleShareLinks: [...s.bundleShareLinks, link] }));
         get().logActivity(
@@ -878,6 +980,7 @@ export const useVaultStore = create<VaultState>()(
             linkId: link.id,
             sharedWith: opts.sharedWith ?? 'unspecified',
             purpose: link.purpose,
+            createdByName: actor.name,
           },
           undefined,
           bundleId,
@@ -900,7 +1003,7 @@ export const useVaultStore = create<VaultState>()(
           ),
         }));
         if (link) {
-          get().logActivity('bundle_link_revoked', { linkId: id }, undefined, link.bundleId);
+          get().logActivity('bundle_link_revoked', { linkId: id, linkType: 'bundle' }, undefined, link.bundleId);
         }
       },
 
@@ -1100,7 +1203,13 @@ export const useVaultStore = create<VaultState>()(
     }),
     {
       name: 'dox-vault',
-      version: 3,
+      version: 4,
+      onRehydrateStorage: () => () => {
+        queueMicrotask(() => {
+          useVaultStore.getState().purgeExpiredShareLinks();
+          useVaultStore.getState().pruneActivityLogs();
+        });
+      },
       migrate: (persisted, version) => {
         const state = persisted as VaultState;
         if (state.user) {
@@ -1145,6 +1254,22 @@ export const useVaultStore = create<VaultState>()(
             };
           });
         }
+        if (version < 4) {
+          const actorName = state.user?.name ?? 'You';
+          if (state.tempLinks) {
+            state.tempLinks = state.tempLinks.map((l) => ({
+              ...l,
+              createdAt: l.createdAt ?? l.expiresAt,
+              createdByName: l.createdByName ?? actorName,
+            }));
+          }
+          if (state.bundleShareLinks) {
+            state.bundleShareLinks = state.bundleShareLinks.map((l) => ({
+              ...l,
+              createdByName: l.createdByName ?? actorName,
+            }));
+          }
+        }
         return state;
       },
     },
@@ -1158,6 +1283,7 @@ export function getExpiringDocuments(docs: Document[], withinDays = 30): Documen
   limit.setDate(limit.getDate() + withinDays);
 
   return docs.filter((d) => {
+    if (d.archivedAt) return false;
     if (d.verificationStatus === 'pending') return false;
     if (!d.expiryDate || d.renewedAt) return false;
     const exp = new Date(d.expiryDate);
@@ -1166,5 +1292,5 @@ export function getExpiringDocuments(docs: Document[], withinDays = 30): Documen
 }
 
 export function getHealthDocuments(docs: Document[]): Document[] {
-  return docs.filter(isHealthDomainDoc);
+  return docs.filter((d) => !d.archivedAt && isHealthDomainDoc(d));
 }

@@ -27,6 +27,8 @@ import { ReferralsPage } from '@/features/referrals/ReferralsPage';
 import { PlanPage } from '@/features/plan/PlanPage';
 import { AdminGatePage } from '@/features/admin/AdminGatePage';
 import { AdminDashboardPage } from '@/features/admin/AdminDashboardPage';
+import { ArchivedDocumentsPage } from '@/features/documents/ArchivedDocumentsPage';
+import { ActivityLogPage } from '@/features/profile/ActivityLogPage';
 import { useTheme } from '@/hooks/useTheme';
 
 function PublicCardRoute() {
@@ -58,6 +60,8 @@ export default function App() {
           <Route path="/profile/family" element={<FamilyManagementPage />} />
           <Route path="/profile/settings" element={<SettingsPage />} />
           <Route path="/profile/security" element={<SecurityPage />} />
+          <Route path="/profile/activity" element={<ActivityLogPage />} />
+          <Route path="/profile/archived" element={<ArchivedDocumentsPage />} />
           <Route path="/profile/backup" element={<BackupPage />} />
           <Route path="/profile/referrals" element={<ReferralsPage />} />
           <Route path="/profile/plan" element={<PlanPage />} />

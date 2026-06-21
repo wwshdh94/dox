@@ -3,6 +3,7 @@ import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { Input } from '@/components/Input';
 import { Modal } from '@/components/Modal';
+import { LoadingOverlay } from '@/components/LoadingScreen';
 import { useVaultStore } from '@/store/useVaultStore';
 import {
   decryptVaultBackup,
@@ -281,6 +282,7 @@ export function BackupPage() {
           Restore vault
         </Button>
       </Modal>
+      <LoadingOverlay open={busy} label="Working on backup…" />
     </div>
   );
 }

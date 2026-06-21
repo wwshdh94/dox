@@ -1,6 +1,6 @@
 # Dox — Development Track
 
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-21
 
 ## Current status
 
@@ -44,6 +44,9 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Production doc cap** — `src/lib/documentLimits.ts`: hard 50 docs/member (all plans); `src/lib/adminNotify.ts` webhooks on cap; enforced in store + backup restore scan
 - [x] **Admin dashboard** — passcode + owner email gate at `/admin`; **platform-wide** stats across all households (registry + events), not single-user vault
 - [x] **UI uniformity** — consistent `page-main` / `surface-panel` / `backFallback` / `pb-28`+BottomNav patterns across pages; redundant footer back links removed
+- [x] **Document field schemas** — fixed extracted fields per `DocType` in `src/lib/docFields.ts`; OCR/upload strip extras; notes for additional data; passport/PUC/insurance expiry fields; invoice warranty flow
+- [x] **Share UX overhaul** — document share modals (WhatsApp/email/temp URL), transparent overlay, dimmed backdrop
+- [x] **Profile Activity & shares** — `/profile/activity`: Active URLs filter, share activity + full log, creator attribution, auto-purge expired links, plan retention (30d/1y)
 
 ## In progress
 
@@ -76,7 +79,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 ## Test results
 
 ```
-npm test  — 51/51 pass
+npm test  — 56/56 pass
 npm run build — success (PWA SW generated)
 ```
 

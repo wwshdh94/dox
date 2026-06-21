@@ -6,7 +6,6 @@ import { useVaultStore } from '@/store/useVaultStore';
 
 export function SecurityPage() {
   const settings = useVaultStore((s) => s.settings);
-  const activities = useVaultStore((s) => s.activities);
   const setLockPin = useVaultStore((s) => s.setLockPin);
   const locked = useVaultStore((s) => s.locked);
 
@@ -36,14 +35,13 @@ export function SecurityPage() {
           </Link>
         </div>
 
-        <section>
-          <p className="section-label mb-2">Recent activity</p>
-          <ul className="max-h-48 space-y-1 overflow-y-auto text-xs text-muted">
-            {activities.slice(0, 20).map((a) => (
-              <li key={a.id}>{a.event} · {new Date(a.createdAt).toLocaleString()}</li>
-            ))}
-          </ul>
-        </section>
+        <Link
+          to="/profile/activity"
+          className="surface-panel flex items-center justify-between px-4 py-3.5 text-sm font-medium transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <span>Activity & share links</span>
+          <span className="text-muted">→</span>
+        </Link>
       </main>
     </div>
   );

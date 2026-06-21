@@ -56,3 +56,10 @@ export function maskValue(value: string, visible = 4): string {
   if (value.length <= visible) return value;
   return '•'.repeat(value.length - visible) + value.slice(-visible);
 }
+
+/** Practical frontend email check — not RFC-complete, good for share forms. */
+export function isValidEmail(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed);
+}

@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useVaultStore } from '@/store/useVaultStore';
 import { useStoreHydration } from '@/hooks/useStoreHydration';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { debug } from '@/lib/debug';
 
 export function AppLayout() {
@@ -32,13 +33,8 @@ export function AppLayout() {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <div className="flex gap-1.5">
-          <span className="loading-dot h-2 w-2 rounded-full bg-accent-ink" />
-          <span className="loading-dot h-2 w-2 rounded-full bg-accent-ink [animation-delay:0.2s]" />
-          <span className="loading-dot h-2 w-2 rounded-full bg-accent-ink [animation-delay:0.4s]" />
-        </div>
-        <p className="text-sm text-muted">Loading Dox…</p>
+      <div className="flex min-h-dvh items-center justify-center">
+        <LoadingScreen label="Loading Dox…" />
       </div>
     );
   }

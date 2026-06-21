@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Header } from '@/components/Header';
@@ -10,49 +10,19 @@ import { useVaultStore } from '@/store/useVaultStore';
 import { bundleShareUrl } from '@/lib/bundleShare';
 import { bundleShareDurationHours, formatShareDuration } from '@/lib/planLimits';
 
-function activityLabel(event: string, meta: Record<string, string | number | boolean>): string {
-  switch (event) {
-    case 'bundle_shared':
-      return `Shared with ${meta.sharedWith ?? 'recipient'} · ${meta.purpose ?? ''}`;
-    case 'bundle_link_accessed':
-      return `Link opened (view #${meta.viewCount ?? '?'})`;
-    case 'bundle_printed':
-      return 'Printed via secure link';
-    case 'bundle_link_revoked':
-      return 'Share link revoked';
-    case 'bundle_created':
-      return 'Bundle created';
-    case 'bundle_updated':
-      return 'Bundle updated';
-    default:
-      return event.replace(/_/g, ' ');
-  }
-}
-
 export function BundleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const bundles = useVaultStore((s) => s.bundles);
   const user = useVaultStore((s) => s.user);
   const documents = useVaultStore((s) => s.documents);
-  const activities = useVaultStore((s) => s.activities);
-  const bundleShareLinks = useVaultStore((s) => s.bundleShareLinks);
   const createBundleShareLink = useVaultStore((s) => s.createBundleShareLink);
-  const revokeBundleShareLink = useVaultStore((s) => s.revokeBundleShareLink);
   const deleteBundle = useVaultStore((s) => s.deleteBundle);
   const navigate = useNavigate();
 
   const bundle = useMemo(() => bundles.find((b) => b.id === id), [bundles, id]);
   const bundleDocs = useMemo(
-    () => (bundle ? documents.filter((d) => bundle.documentIds.includes(d.id)) : []),
+    () => (bundle ? documents.filter((d) => !d.archivedAt && bundle.documentIds.includes(d.id)) : []),
     [bundle, documents],
-  );
-  const activeLinks = useMemo(
-    () => bundleShareLinks.filter((l) => l.bundleId === id && l.status === 'active'),
-    [bundleShareLinks, id],
-  );
-  const bundleActivities = useMemo(
-    () => activities.filter((a) => a.bundleId === id),
-    [activities, id],
   );
 
   const [shareOpen, setShareOpen] = useState(false);
@@ -128,37 +98,12 @@ export function BundleDetailPage() {
           <Button className="w-full" onClick={handleShare}>
             Create temp share link ({formatShareDuration(bundleShareHours)})
           </Button>
-        </section>
-
-        {activeLinks.length > 0 && (
-          <section className="text-sm">
-            <p className="font-medium text-muted">Active links</p>
-            {activeLinks.map((l) => (
-              <div key={l.id} className="mt-2 flex items-center justify-between rounded-xl bg-bg px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-xs">/p/{l.token.slice(0, 8)}…</p>
-                  {l.sharedWith && <p className="text-xs text-muted">For {l.sharedWith}</p>}
-                </div>
-                <Button variant="ghost" className="text-xs" onClick={() => revokeBundleShareLink(l.id)}>
-                  Revoke
-                </Button>
-              </div>
-            ))}
-          </section>
-        )}
-
-        <section>
-          <p className="mb-2 text-sm font-medium text-muted">Share activity</p>
-          {bundleActivities.length === 0 && (
-            <p className="text-xs text-muted">No activity yet. Create a share link to start logging.</p>
-          )}
-          <ul className="space-y-1 text-xs text-muted">
-            {bundleActivities.slice(0, 15).map((a) => (
-              <li key={a.id}>
-                {activityLabel(a.event, a.metadata)} · {new Date(a.createdAt).toLocaleString()}
-              </li>
-            ))}
-          </ul>
+          <Link
+            to="/profile/activity"
+            className="block text-center text-xs font-medium text-accent-ink"
+          >
+            Manage active links & activity →
+          </Link>
         </section>
 
         <Button variant="danger" className="w-full" onClick={() => setDeleteOpen(true)}>
