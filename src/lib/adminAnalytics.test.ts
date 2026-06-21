@@ -53,6 +53,7 @@ describe('buildPlatformAdminSnapshot', () => {
     expect(snapshot.totals.households).toBe(2);
     expect(snapshot.totals.freePlans).toBe(1);
     expect(snapshot.totals.proPlans).toBe(1);
+    expect(snapshot.plans).toEqual({ free: 1, pro: 1, family: 0 });
     expect(snapshot.totals.totalDocuments).toBe(35);
     expect(snapshot.totals.verifiedDocuments).toBe(32);
     expect(snapshot.totals.pendingDocuments).toBe(3);

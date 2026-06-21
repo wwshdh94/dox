@@ -4,6 +4,8 @@ import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/Button';
 import { PlanBadge } from '@/components/PlanBadge';
+import { PlatformUpdateBanner } from '@/components/PlatformUpdateBanner';
+import { countUnreadFeedbackReplies } from '@/lib/feedback';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { isProUser, canUseCloudAi, canUseEmailReminders } from '@/lib/planLimits';
 import { useVaultStore } from '@/store/useVaultStore';
@@ -130,6 +132,7 @@ export function ProfilePage() {
   const onPro = isProUser(user ?? null);
   const emailAllowed = canUseEmailReminders(user);
   const cloudAllowed = canUseCloudAi(user);
+  const unreadFeedback = user ? countUnreadFeedbackReplies(user.id) : 0;
 
   const reminderQuick =
     settings.pushReminders && settings.emailReminders
@@ -168,6 +171,7 @@ export function ProfilePage() {
         center={user?.plan ? <PlanBadge plan={user.plan} /> : undefined}
       />
       <main className="page-main animate-fade-up space-y-5">
+        {user?.id ? <PlatformUpdateBanner userId={user.id} /> : null}
         <div className="surface-panel-elevated p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
@@ -256,6 +260,23 @@ export function ProfilePage() {
             <SettingsNavPill to="/profile/activity">Activity</SettingsNavPill>
             <SettingsNavPill to="/profile/archived">Archived</SettingsNavPill>
             <SettingsNavPill to="/bundles">Bundles</SettingsNavPill>
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <p className="section-label">Help</p>
+          <div className="flex gap-2">
+            <Link
+              to="/profile/feedback"
+              className="inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-surface-elevated px-2 py-2 text-center text-[0.65rem] font-semibold leading-tight text-text shadow-sm transition-all hover:border-accent-muted hover:bg-accent-soft/40 active:scale-[0.98]"
+            >
+              Feedback
+              {unreadFeedback > 0 ? (
+                <span className="rounded-full bg-accent px-1.5 py-0.5 text-[0.55rem] text-accent-fg">
+                  {unreadFeedback}
+                </span>
+              ) : null}
+            </Link>
           </div>
         </section>
 

@@ -13,6 +13,7 @@ export interface PlatformAdminSnapshot {
     households: number;
     freePlans: number;
     proPlans: number;
+    familyPlans: number;
     totalDocuments: number;
     verifiedDocuments: number;
     pendingDocuments: number;
@@ -22,6 +23,11 @@ export interface PlatformAdminSnapshot {
     activeTempLinks: number;
     householdsAtCap: number;
     limitEvents: number;
+  };
+  plans: {
+    free: number;
+    pro: number;
+    family: number;
   };
   referralStats: {
     totalReferralCodes: number;
@@ -77,9 +83,11 @@ export function buildPlatformAdminSnapshot(): PlatformAdminSnapshot {
       households: households.length,
       freePlans: plans.free,
       proPlans: plans.pro,
+      familyPlans: plans.family,
       ...totals,
       limitEvents,
     },
+    plans,
     referralStats: {
       totalReferralCodes: Object.keys(referralLedger).length,
       totalSuccessfulReferrals,

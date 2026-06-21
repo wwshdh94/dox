@@ -2,7 +2,10 @@ import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { PLAN_FEATURES, isProUser } from '@/lib/planLimits';
+import { formatDiscountPrice, getActiveDiscount } from '@/lib/userModeration';
 import { useVaultStore } from '@/store/useVaultStore';
+
+const PRO_LIST_INR = 499;
 
 export function PlanPage() {
   const user = useVaultStore((s) => s.user);
@@ -11,6 +14,8 @@ export function PlanPage() {
   if (!user) return null;
 
   const onPro = isProUser(user);
+  const discount = getActiveDiscount(user.id);
+  const salePrice = discount ? formatDiscountPrice(PRO_LIST_INR, discount.percentOff) : null;
 
   return (
     <div className="min-h-full pb-28">
@@ -29,6 +34,26 @@ export function PlanPage() {
             Current plan
           </span>
         </div>
+
+        {discount && !onPro ? (
+          <div className="surface-panel border border-success/30 bg-success/10 p-4 text-sm">
+            <p className="font-semibold text-success">{discount.label}</p>
+            <p className="mt-1 text-muted">
+              Code <span className="font-mono font-semibold text-text">{discount.code}</span> —{' '}
+              {discount.percentOff}% off Pro
+              {salePrice !== null ? (
+                <>
+                  {' '}
+                  (<span className="line-through">₹{PRO_LIST_INR}</span>{' '}
+                  <span className="font-semibold text-text">₹{salePrice}</span>/yr demo)
+                </>
+              ) : null}
+            </p>
+            {discount.expiresAt ? (
+              <p className="mt-1 text-xs text-muted">Valid until {discount.expiresAt}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="surface-panel overflow-hidden text-sm">
           <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 border-b border-border bg-bg/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted">
@@ -50,7 +75,7 @@ export function PlanPage() {
 
         {!onPro ? (
           <Button className="w-full" onClick={() => setUserPlan('pro')}>
-            Upgrade to Pro (demo)
+            {discount ? `Upgrade to Pro — ₹${salePrice}/yr (demo)` : 'Upgrade to Pro (demo)'}
           </Button>
         ) : (
           <Button variant="secondary" className="w-full" onClick={() => setUserPlan('free')}>

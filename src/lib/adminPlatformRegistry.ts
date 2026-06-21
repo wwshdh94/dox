@@ -1,6 +1,5 @@
 import type { Asset, Document, FamilyMember, TempShareLink, User } from '@/types';
 import { membersAtDocumentCap } from '@/lib/documentLimits';
-import { isProUser } from '@/lib/planLimits';
 import { countUnverifiedDocuments, countVerifiedDocuments } from '@/lib/verificationQueue';
 
 const REGISTRY_KEY = 'prevault-admin-platform-households';
@@ -42,6 +41,14 @@ export function listPlatformHouseholds(): PlatformHousehold[] {
   return readRegistry().sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
+}
+
+export function updateHouseholdPlan(userId: string, plan: User['plan']): void {
+  const rows = readRegistry();
+  const idx = rows.findIndex((r) => r.userId === userId);
+  if (idx < 0) return;
+  rows[idx] = { ...rows[idx], plan, updatedAt: new Date().toISOString() };
+  writeRegistry(rows);
 }
 
 export function upsertPlatformHousehold(row: PlatformHousehold): void {
@@ -179,12 +186,14 @@ export function seedDemoPlatformHouseholds(): void {
   }
 }
 
-export function countPlans(rows: PlatformHousehold[]): { free: number; pro: number } {
+export function countPlans(rows: PlatformHousehold[]): { free: number; pro: number; family: number } {
   let free = 0;
   let pro = 0;
+  let family = 0;
   for (const row of rows) {
-    if (isProUser({ plan: row.plan } as User)) pro += 1;
+    if (row.plan === 'family') family += 1;
+    else if (row.plan === 'pro') pro += 1;
     else free += 1;
   }
-  return { free, pro };
+  return { free, pro, family };
 }

@@ -63,10 +63,15 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Document review status flow** — upload → OCR (`processing`) → home pill (`under_review`, orange) → user marks **Reviewed** (green) or **Rejected** (red) on document detail; share/expiry gated until reviewed (`src/lib/documentReview.ts`, store v6 migration)
 - [x] **Camera photo editor** — after device camera capture: 4-corner crop, brightness/contrast/color sliders, HDR toggle; canvas export before upload (`src/components/ImageEditor.tsx`, `src/lib/imageEdit.ts`)
 - [x] **Family document parity** — shared `DocumentPill` in search/expiring lists; member-scoped review banner; `canManageDocument` gates edit/share/review/archive on detail, upload, and store
+- [x] **Admin desktop dashboard** (`feature/admin`) — `AdminLayout` + `AdminDesktopDashboard` (KPIs, trends, household table, events); `AdminMobileStats` for simple mobile KPIs; `AppLayout` bypasses lock/onboarding on `/admin*`; store `syncPlatformMetrics` on vault mutations
+- [x] **Admin one-click actions** — per-household Email / Push / Update / Pro·Family·Free; broadcast panel; platform update inbox on Profile; webhook via `VITE_ADMIN_NOTIFY_WEBHOOK`
+- [x] **User feedback** — `/profile/feedback` submit + private admin replies; admin inbox on dashboard with status (open → fixed/closed)
+- [x] **Admin moderation** — block/unblock users (`/blocked` screen); grant Pro discounts shown on Plan page; admin routes lazy-loaded; no admin links in customer UI
+- [x] **Admin Ops & Finance dashboard** — `/admin/analytics` with MRR/ARR estimates, conversion, support load, activity KPIs; tab nav from Platform dashboard
 
 ## In progress
 
-- Nothing
+- **Admin panel** on `feature/admin` — smoke-test both dashboards; prod env for admin keys
 
 ## Next steps (user testing)
 

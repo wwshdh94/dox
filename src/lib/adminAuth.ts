@@ -14,16 +14,40 @@ export function getAdminPasscode(): string {
   return import.meta.env.DEV ? '7829' : '';
 }
 
-/** Only this Google account may access admin — set in .env (your email). */
+/** True in dev when owner email env is unset — any signed-in user may use admin passcode. */
+export function isDevAdminBypass(): boolean {
+  return import.meta.env.DEV && !import.meta.env.VITE_ADMIN_OWNER_EMAIL;
+}
+
+/** Production owner email from env only. */
 export function getAdminOwnerEmail(): string {
   const fromEnv = import.meta.env.VITE_ADMIN_OWNER_EMAIL as string | undefined;
   return fromEnv ? normalizeEmail(fromEnv) : '';
 }
 
-export function isAdminOwnerEmail(email: string | undefined | null): boolean {
+export function isConfiguredAdminOwner(email: string | undefined | null): boolean {
   const owner = getAdminOwnerEmail();
   if (!owner || !email) return false;
   return normalizeEmail(email) === owner;
+}
+
+/** Gate + session check — dev bypass allows any signed-in user when owner env is unset. */
+export function isAdminOwnerEmail(email: string | undefined | null): boolean {
+  if (!email) return false;
+  if (isConfiguredAdminOwner(email)) return true;
+  return isDevAdminBypass();
+}
+
+/** Accounts that must not be blocked (configured owner, or acting admin in dev). */
+export function isProtectedAdminAccount(
+  email: string | undefined | null,
+  actingAdminEmail?: string | null,
+): boolean {
+  if (isConfiguredAdminOwner(email)) return true;
+  if (isDevAdminBypass() && actingAdminEmail && email) {
+    return normalizeEmail(email) === normalizeEmail(actingAdminEmail);
+  }
+  return false;
 }
 
 function readSession(): AdminSession | null {
@@ -61,6 +85,16 @@ export function adminLogout(): void {
   sessionStorage.removeItem(SESSION_KEY);
 }
 
+export function getAdminSession(): AdminSession | null {
+  return readSession();
+}
+
+export function clearAdminSession(): void {
+  adminLogout();
+}
+
 export function isAdminConfigured(): boolean {
-  return Boolean(getAdminPasscode() && getAdminOwnerEmail());
+  if (!getAdminPasscode()) return false;
+  if (getAdminOwnerEmail()) return true;
+  return isDevAdminBypass();
 }

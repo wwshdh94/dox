@@ -6,7 +6,17 @@ export type AdminEventType =
   | 'plan_change'
   | 'backup_created'
   | 'referral_rewarded'
-  | 'bundle_shared';
+  | 'bundle_shared'
+  | 'admin_email'
+  | 'admin_push'
+  | 'admin_update'
+  | 'feedback_received'
+  | 'feedback_replied'
+  | 'feedback_status_changed'
+  | 'user_blocked'
+  | 'user_unblocked'
+  | 'discount_granted'
+  | 'discount_revoked';
 
 export interface AdminEvent {
   id: string;

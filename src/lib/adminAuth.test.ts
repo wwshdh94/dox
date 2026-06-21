@@ -36,4 +36,12 @@ describe('adminAuth', () => {
     expect(isAdminAuthenticated('owner@example.com')).toBe(true);
     expect(isAdminAuthenticated('other@example.com')).toBe(false);
   });
+
+  it('allows any signed-in user in dev when owner email env is unset', () => {
+    vi.unstubAllEnvs();
+    sessionStorage.clear();
+    expect(isAdminOwnerEmail('demo@gmail.com')).toBe(true);
+    expect(adminLogin('7829', 'demo@gmail.com')).toBe(true);
+    expect(isAdminAuthenticated('demo@gmail.com')).toBe(true);
+  });
 });

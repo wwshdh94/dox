@@ -4,6 +4,8 @@ import { useVaultStore } from '@/store/useVaultStore';
 import { useStoreHydration } from '@/hooks/useStoreHydration';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { debug } from '@/lib/debug';
+import { isAdminAuthenticated } from '@/lib/adminAuth';
+import { isUserBlocked } from '@/lib/userModeration';
 
 export function AppLayout() {
   const hydrated = useStoreHydration();
@@ -23,6 +25,9 @@ export function AppLayout() {
     location.pathname.startsWith('/c/') ||
     location.pathname.startsWith('/v/') ||
     location.pathname.startsWith('/p/');
+
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isBlockedRoute = location.pathname === '/blocked';
 
   const biometricLockEnabled = useVaultStore((s) => s.settings.biometricLockEnabled);
   const locked = useVaultStore((s) => s.locked);
@@ -47,9 +52,26 @@ export function AppLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  if (user && !onboardingComplete && location.pathname !== '/onboarding') {
+  if (user && !onboardingComplete && location.pathname !== '/onboarding' && !isAdminRoute) {
     debug('AppLayout', 'redirect → /onboarding');
     return <Navigate to="/onboarding" replace />;
+  }
+
+  const adminSessionOnAdminRoute =
+    Boolean(user) && isAdminRoute && isAdminAuthenticated(user?.email);
+
+  const userBlocked =
+    user &&
+    isUserBlocked(user.id, user.email) &&
+    !adminSessionOnAdminRoute &&
+    !isBlockedRoute;
+
+  if (userBlocked) {
+    return <Navigate to="/blocked" replace />;
+  }
+
+  if (user && isBlockedRoute && !isUserBlocked(user.id, user.email)) {
+    return <Navigate to="/" replace />;
   }
 
   if (
@@ -57,7 +79,9 @@ export function AppLayout() {
     biometricLockEnabled &&
     locked &&
     location.pathname !== '/lock' &&
-    !isPublic
+    !isPublic &&
+    !isAdminRoute &&
+    !isBlockedRoute
   ) {
     return <Navigate to="/lock" replace />;
   }

@@ -8,6 +8,7 @@ import {
   isAdminAuthenticated,
   isAdminConfigured,
   isAdminOwnerEmail,
+  isDevAdminBypass,
 } from '@/lib/adminAuth';
 import { useVaultStore } from '@/store/useVaultStore';
 
@@ -93,6 +94,11 @@ export function AdminGatePage() {
           <p className="mt-1 text-sm text-muted">
             Signed in as {user.email}. Enter your admin passcode.
           </p>
+          {isDevAdminBypass() ? (
+            <p className="mt-2 text-xs text-muted">
+              Dev mode — no env required. Passcode: <code className="text-accent-ink">7829</code>
+            </p>
+          ) : null}
         </div>
         <Input
           label="Passcode"

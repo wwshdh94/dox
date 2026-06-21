@@ -584,6 +584,7 @@ export const useVaultStore = create<VaultState>()(
             },
           ],
         }));
+        get().syncPlatformMetrics();
         return id;
       },
 
@@ -799,6 +800,7 @@ export const useVaultStore = create<VaultState>()(
                   : d,
               ),
             }));
+            get().syncPlatformMetrics();
             return;
           }
 
@@ -823,6 +825,7 @@ export const useVaultStore = create<VaultState>()(
                 : d,
             ),
           }));
+          get().syncPlatformMetrics();
         } catch {
           set((s) => ({
             documents: s.documents.map((d) =>
@@ -831,6 +834,7 @@ export const useVaultStore = create<VaultState>()(
                 : d,
             ),
           }));
+          get().syncPlatformMetrics();
         }
       },
 
@@ -905,6 +909,7 @@ export const useVaultStore = create<VaultState>()(
           ),
         }));
         get().logActivity('rejected', {}, id);
+        get().syncPlatformMetrics();
       },
 
       updateDocument: (id, partial) => {
@@ -915,6 +920,7 @@ export const useVaultStore = create<VaultState>()(
             d.id === id ? { ...d, ...partial, updatedAt: new Date().toISOString() } : d,
           ),
         }));
+        get().syncPlatformMetrics();
       },
 
       deleteDocument: (id) => {
@@ -931,6 +937,7 @@ export const useVaultStore = create<VaultState>()(
             updatedAt: new Date().toISOString(),
           })),
         }));
+        get().syncPlatformMetrics();
       },
 
       markRenewed: (id) => {
@@ -943,6 +950,7 @@ export const useVaultStore = create<VaultState>()(
           ),
         }));
         get().logActivity('renewed', {}, id);
+        get().syncPlatformMetrics();
       },
 
       archiveDocument: (id) => {
@@ -955,6 +963,7 @@ export const useVaultStore = create<VaultState>()(
           ),
         }));
         get().logActivity('archived', {}, id);
+        get().syncPlatformMetrics();
       },
 
       unarchiveDocument: (id) => {
@@ -965,6 +974,7 @@ export const useVaultStore = create<VaultState>()(
           ),
         }));
         get().logActivity('unarchived', {}, id);
+        get().syncPlatformMetrics();
       },
 
       logActivity: (event, metadata = {}, documentId, bundleId) => {

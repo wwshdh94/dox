@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
@@ -26,11 +27,30 @@ import { BundleSharePage } from '@/features/bundles/BundleSharePage';
 import { BackupPage } from '@/features/backup/BackupPage';
 import { ReferralsPage } from '@/features/referrals/ReferralsPage';
 import { PlanPage } from '@/features/plan/PlanPage';
-import { AdminGatePage } from '@/features/admin/AdminGatePage';
-import { AdminDashboardPage } from '@/features/admin/AdminDashboardPage';
+import { FeedbackPage } from '@/features/feedback/FeedbackPage';
+import { BlockedAccountPage } from '@/features/auth/BlockedAccountPage';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { ArchivedDocumentsPage } from '@/features/documents/ArchivedDocumentsPage';
 import { ActivityLogPage } from '@/features/profile/ActivityLogPage';
 import { useTheme } from '@/hooks/useTheme';
+
+const AdminGatePage = lazy(() =>
+  import('@/features/admin/AdminGatePage').then((m) => ({ default: m.AdminGatePage })),
+);
+const AdminDashboardPage = lazy(() =>
+  import('@/features/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })),
+);
+const AdminOpsFinancePage = lazy(() =>
+  import('@/features/admin/AdminOpsFinancePage').then((m) => ({ default: m.AdminOpsFinancePage })),
+);
+
+function AdminRouteFallback() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center">
+      <LoadingScreen label="Loading admin…" />
+    </div>
+  );
+}
 
 function PublicCardRoute() {
   const { slug } = useParams<{ slug: string }>();
@@ -67,6 +87,8 @@ export default function App() {
           <Route path="/profile/backup" element={<BackupPage />} />
           <Route path="/profile/referrals" element={<ReferralsPage />} />
           <Route path="/profile/plan" element={<PlanPage />} />
+          <Route path="/profile/feedback" element={<FeedbackPage />} />
+          <Route path="/blocked" element={<BlockedAccountPage />} />
           <Route path="/profile/visiting-card" element={<VisitingCardPage />} />
           <Route path="/bundles" element={<BundlesPage />} />
           <Route path="/bundles/new" element={<BundleCreatePage />} />
@@ -75,8 +97,30 @@ export default function App() {
           <Route path="/c/:slug" element={<PublicCardRoute />} />
           <Route path="/v/:token" element={<TempSharePage />} />
           <Route path="/p/:token" element={<BundleSharePage />} />
-          <Route path="/admin" element={<AdminGatePage />} />
-          <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+          <Route
+            path="/admin"
+            element={
+              <Suspense fallback={<AdminRouteFallback />}>
+                <AdminGatePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <Suspense fallback={<AdminRouteFallback />}>
+                <AdminDashboardPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <Suspense fallback={<AdminRouteFallback />}>
+                <AdminOpsFinancePage />
+              </Suspense>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

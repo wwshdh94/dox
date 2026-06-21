@@ -1,5 +1,6 @@
 import type { FamilyMember, User } from '@/types';
 import { appendAdminEvent } from '@/lib/adminEvents';
+import { postAdminWebhook } from '@/lib/adminWebhook';
 import { PRODUCTION_MAX_DOCS_PER_MEMBER } from '@/lib/documentLimits';
 
 const DEDUPE_KEY = 'prevault-admin-limit-alerts';
@@ -52,18 +53,7 @@ export async function notifyMemberDocLimitReached(
     cap: PRODUCTION_MAX_DOCS_PER_MEMBER,
   };
 
-  const webhook = import.meta.env.VITE_ADMIN_NOTIFY_WEBHOOK as string | undefined;
-  if (webhook) {
-    try {
-      await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      // Never block user flows on notify failure
-    }
-  }
+  await postAdminWebhook(body);
 
   if (import.meta.env.DEV) {
     console.info('[PreVault admin] member_doc_limit_reached', body);
