@@ -91,7 +91,7 @@ function DiscountModal({
               type="date"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
-              className="mt-1 min-h-10 w-full rounded-xl border border-border bg-bg px-3 text-sm"
+              className="mt-1 min-h-10 w-full min-w-0 max-w-full rounded-xl border border-border bg-bg px-2.5 text-sm sm:px-3 [color-scheme:light] dark:[color-scheme:dark]"
             />
           </label>
         </div>

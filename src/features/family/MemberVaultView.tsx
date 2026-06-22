@@ -1,54 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExpiringBanner } from '@/components/ExpiryChip';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { MemberDocStats } from '@/components/MemberDocStats';
-import { PendingVerificationBanner } from '@/components/PendingVerificationBanner';
 import { DocumentPill } from '@/features/family/DocumentPill';
-import { dismissExpiringBanner, isExpiringBannerDismissed } from '@/lib/expiringBanner';
 import { canViewDocument } from '@/lib/documentVisibility';
 import { isHealthDomainDoc } from '@/lib/docTags';
 import { memberFamilyDocStats } from '@/lib/memberStats';
-import { getExpiringDocuments, useVaultStore } from '@/store/useVaultStore';
+import { useVaultStore } from '@/store/useVaultStore';
+import { VaultSearchRow } from '@/features/family/VaultSearchRow';
 import { MemberVaultPanel } from '@/features/family/MemberVaultPanel';
 
-export function MemberVaultContent({ memberId }: { memberId: string }) {
-  const user = useVaultStore((s) => s.user);
-  const shareGrants = useVaultStore((s) => s.shareGrants);
+export function MemberVaultContent({
+  memberId,
+  hideMemberHeader = false,
+}: {
+  memberId: string;
+  hideMemberHeader?: boolean;
+}) {
   const members = useVaultStore((s) => s.members);
   const documents = useVaultStore((s) => s.documents);
   const member = useMemo(() => members.find((m) => m.id === memberId), [members, memberId]);
   const stats = useMemo(() => memberFamilyDocStats(documents, memberId), [documents, memberId]);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const navigate = useNavigate();
-
-  const memberDocs = useMemo(
-    () => documents.filter((d) => !d.archivedAt && !isHealthDomainDoc(d) && d.memberId === memberId),
-    [documents, memberId],
-  );
-
-  const visibleMemberDocs = useMemo(
-    () => memberDocs.filter((d) => canViewDocument(d, members, user, shareGrants, documents)),
-    [memberDocs, members, user, shareGrants],
-  );
-
-  const expiringDocs = useMemo(
-    () => getExpiringDocuments(visibleMemberDocs),
-    [visibleMemberDocs],
-  );
-
-  useEffect(() => {
-    setBannerDismissed(isExpiringBannerDismissed());
-  }, []);
-
-  useEffect(() => {
-    setBannerDismissed(isExpiringBannerDismissed());
-  }, [memberId]);
-
-  const dismissExpiringBannerHandler = () => {
-    setBannerDismissed(true);
-    dismissExpiringBanner();
-  };
 
   const openDueDocuments = (id?: string) => {
     navigate(`/expiring?member=${id ?? memberId}`);
@@ -58,30 +31,23 @@ export function MemberVaultContent({ memberId }: { memberId: string }) {
 
   return (
     <div className="space-y-5">
-      <PendingVerificationBanner memberId={memberId} />
-      {!bannerDismissed && expiringDocs.length > 0 && (
-        <ExpiringBanner
-          count={expiringDocs.length}
-          onClick={openDueDocuments}
-          onDismiss={dismissExpiringBannerHandler}
-        />
-      )}
-
       <div className="space-y-3">
-        <div className="flex w-full items-center gap-3.5 rounded-2xl">
-          <MemberAvatar member={member} size="sm" documents={documents} />
-          <div>
-            <p className="font-semibold tracking-tight">{member.displayName}</p>
-            <p className="text-xs text-muted">
-              <MemberDocStats
-                total={stats.total}
-                expiring={stats.expiring}
-                memberId={member.id}
-                onDueSoon={openDueDocuments}
-              />
-            </p>
+        {!hideMemberHeader && (
+          <div className="flex w-full items-center gap-3.5 rounded-2xl">
+            <MemberAvatar member={member} size="sm" documents={documents} />
+            <div className="flex min-w-0 flex-col justify-center gap-0.5 self-stretch py-0.5">
+              <p className="font-semibold leading-tight tracking-tight">{member.displayName}</p>
+              <p className="text-[0.6875rem] leading-tight text-muted">
+                <MemberDocStats
+                  total={stats.total}
+                  expiring={stats.expiring}
+                  memberId={member.id}
+                  onDueSoon={openDueDocuments}
+                />
+              </p>
+            </div>
           </div>
-        </div>
+        )}
         <MemberVaultPanel memberId={member.id} showRelationship={false} />
       </div>
     </div>
@@ -94,8 +60,13 @@ export function MemberVaultView({ memberId }: { memberId: string }) {
   const members = useVaultStore((s) => s.members);
   const documents = useVaultStore((s) => s.documents);
   const member = useMemo(() => members.find((m) => m.id === memberId), [members, memberId]);
+  const stats = useMemo(() => memberFamilyDocStats(documents, memberId), [documents, memberId]);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+
+  const openDueDocuments = (id?: string) => {
+    navigate(`/expiring?member=${id ?? memberId}`);
+  };
 
   const memberDocs = useMemo(
     () =>
@@ -137,13 +108,13 @@ export function MemberVaultView({ memberId }: { memberId: string }) {
 
   return (
     <>
-      <input
-        type="search"
-        placeholder="Search passport, PAN, insurance…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        aria-label="Search documents"
-        className="min-h-11 w-full rounded-2xl border border-border bg-surface-elevated px-4 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-placeholder focus:border-accent focus:ring-2 focus:ring-accent-soft"
+      <VaultSearchRow
+        search={search}
+        onSearchChange={setSearch}
+        member={member}
+        documents={documents}
+        docStats={stats}
+        onDueSoon={openDueDocuments}
       />
 
       {searching ? (
@@ -164,7 +135,7 @@ export function MemberVaultView({ memberId }: { memberId: string }) {
           ))}
         </section>
       ) : (
-        <MemberVaultContent memberId={memberId} />
+        <MemberVaultContent memberId={memberId} hideMemberHeader />
       )}
     </>
   );

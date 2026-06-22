@@ -53,11 +53,12 @@ export function SettingsPage() {
             name="reminders"
             value={reminderMode(settings)}
             onChange={applyReminders}
+            size="compact"
             options={[
-              { value: 'both', label: 'Push and email', disabled: !emailAllowed },
-              { value: 'push', label: 'Push only' },
-              { value: 'email', label: 'Email only', disabled: !emailAllowed },
-              { value: 'off', label: 'Off' },
+              { value: 'both', label: 'Both', disabled: !emailAllowed, hint: 'Push and email reminders' },
+              { value: 'push', label: 'Push', hint: 'Push notifications only' },
+              { value: 'email', label: 'Email', disabled: !emailAllowed, hint: 'Email reminders only' },
+              { value: 'off', label: 'Off', hint: 'No expiry reminders' },
             ]}
           />
           {!emailAllowed && (
@@ -82,12 +83,12 @@ export function SettingsPage() {
             options={[
               {
                 value: 'privacy',
-                label: 'Privacy mode',
+                label: 'On-device',
                 hint: 'On-device OCR only — no cloud AI',
               },
               {
                 value: 'cloud',
-                label: 'Allow cloud AI',
+                label: 'Cloud AI',
                 hint: 'Pro — higher accuracy on Indian doc layouts',
                 disabled: !cloudAllowed,
               },

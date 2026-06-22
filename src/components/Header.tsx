@@ -1,11 +1,25 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/Logo';
+import { NotificationBell } from '@/components/NotificationBell';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { useVaultStore } from '@/store/useVaultStore';
 import type { FamilyHomeView } from '@/types';
 
 const TAB_ROOTS = ['/', '/health', '/assets'];
+const PROFILE_RETURN_KEY = 'prevault-profile-return';
+
+function isProfilePath(pathname: string): boolean {
+  return pathname === '/profile' || pathname.startsWith('/profile/');
+}
+
+function MenuIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export function Header({
   title,
@@ -44,6 +58,20 @@ export function Header({
   };
 
   const showCenter = Boolean(center) && !showMeFamilyToggle;
+  const onProfileRoute = isProfilePath(location.pathname);
+
+  const toggleProfileMenu = () => {
+    if (onProfileRoute) {
+      const returnTo = sessionStorage.getItem(PROFILE_RETURN_KEY) ?? '/';
+      navigate(returnTo);
+      return;
+    }
+    sessionStorage.setItem(
+      PROFILE_RETURN_KEY,
+      `${location.pathname}${location.search}${location.hash}`,
+    );
+    navigate('/profile');
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b border-border-soft bg-surface/80 px-4 py-3 backdrop-blur-md">
@@ -93,14 +121,22 @@ export function Header({
           </div>
         )}
 
-        <div className="relative z-10 ml-auto flex shrink-0 items-center">
+        <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1.5">
           {user ? (
-            <Link
-              to="/profile"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-accent-soft text-sm font-semibold text-accent-ink shadow-sm transition-transform active:scale-95"
-            >
-              {user.name.charAt(0)}
-            </Link>
+            <>
+              <NotificationBell userId={user.id} />
+              <button
+                type="button"
+                aria-label={onProfileRoute ? 'Back to previous page' : 'Open menu'}
+                aria-expanded={onProfileRoute}
+                onClick={toggleProfileMenu}
+                className={`flex h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface-elevated text-accent-ink shadow-sm transition-transform active:scale-95 ${
+                  onProfileRoute ? 'ring-2 ring-accent/30' : ''
+                }`}
+              >
+                <MenuIcon />
+              </button>
+            </>
           ) : (
             <span className="h-10 w-10" aria-hidden="true" />
           )}

@@ -36,7 +36,7 @@ export const PLAN_FEATURES: PlanFeatureRow[] = [
   { feature: 'AI extraction', free: 'On-device OCR', pro: 'On-device + cloud AI' },
   { feature: 'Reminders', free: 'Push only', pro: 'Push + email' },
   { feature: 'Visiting card', free: '—', pro: 'Publish + QR + vCard' },
-  { feature: 'Google Drive backup', free: '—', pro: 'Auto upload' },
+  { feature: 'Backup & restore', free: '—', pro: 'Encrypted file + Google Drive' },
   { feature: 'Activity log', free: '30 days', pro: '1 year' },
   { feature: 'Biometric lock & encryption', free: '✓', pro: '✓' },
 ];
@@ -96,8 +96,12 @@ export function canPublishVisitingCard(user: User | null): boolean {
   return isProUser(user);
 }
 
-export function canUseGoogleDriveBackup(user: User | null): boolean {
+export function canUseVaultBackup(user: User | null): boolean {
   return isProUser(user);
+}
+
+export function canUseGoogleDriveBackup(user: User | null): boolean {
+  return canUseVaultBackup(user);
 }
 
 export function canUseEmailReminders(user: User | null): boolean {

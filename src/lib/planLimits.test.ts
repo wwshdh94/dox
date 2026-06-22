@@ -9,6 +9,7 @@ import {
   canCreateBundle,
   canCreateTempLink,
   canUseCloudAi,
+  canUseVaultBackup,
   isProUser,
   tempLinkDurationHours,
 } from './planLimits';
@@ -77,5 +78,7 @@ describe('planLimits', () => {
   it('gates pro-only features', () => {
     expect(canUseCloudAi(freeUser)).toBe(false);
     expect(canUseCloudAi({ ...freeUser, plan: 'pro' })).toBe(true);
+    expect(canUseVaultBackup(freeUser)).toBe(false);
+    expect(canUseVaultBackup({ ...freeUser, plan: 'pro' })).toBe(true);
   });
 });

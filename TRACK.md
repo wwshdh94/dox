@@ -1,6 +1,6 @@
 # PreVault — Development Track
 
-**Last updated:** 2026-06-21
+**Last updated:** 2026-06-22
 
 ## Current status
 
@@ -68,9 +68,11 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **User feedback** — `/profile/feedback` submit + private admin replies; admin inbox on dashboard with status (open → fixed/closed)
 - [x] **Admin moderation** — block/unblock users (`/blocked` screen); grant Pro discounts shown on Plan page; admin routes lazy-loaded; no admin links in customer UI
 - [x] **Admin Ops & Finance dashboard** — `/admin/analytics` with MRR/ARR estimates, conversion, support load, activity KPIs; tab nav from Platform dashboard
+- [x] **On-device OCR (Aadhaar + PAN)** — Tesseract WASM (`tesseract.js`); card preprocess (grayscale/contrast); Verhoeff Aadhaar + PAN checksum/fixups; field parsers in `src/lib/idDocParser.ts`; upload + store pipeline pass `fileDataUrl`
 
 ## In progress
 
+- **OCR accuracy loop** — expand fixture tests, tune preprocess/PSM, add driving license + voter ID parsers
 - **Admin panel** on `feature/admin` — smoke-test both dashboards; prod env for admin keys
 
 ## Next steps (user testing)
@@ -94,7 +96,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 |----------|--------|
 | Data (demo) | Zustand + localStorage persist |
 | Auth (demo) | Simulated Google; Supabase ready via env |
-| Extraction | On-device mock OCR; cloud behind Pro toggle |
+| Extraction | On-device Tesseract OCR (Aadhaar/PAN); cloud behind Pro toggle |
 | Agents | Manager → Developer → Tester loop |
 
 ## Test results

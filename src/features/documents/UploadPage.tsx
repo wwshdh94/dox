@@ -4,7 +4,8 @@ import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { LoadingOverlay } from '@/components/LoadingScreen';
-import { Input, RadioGroup, Select, Textarea } from '@/components/Input';
+import { Input, RadioGroup, Select } from '@/components/Input';
+import { MentionTextarea } from '@/components/MentionTextarea';
 import { extractOnDevice, findDuplicate } from '@/lib/ocr';
 import { readFileDataUrl } from '@/lib/files';
 import { inferDocTags, CATEGORY_LABELS, DOC_CATEGORIES, DOC_DOMAINS, DOMAIN_LABELS, suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags } from '@/lib/docTags';
@@ -267,6 +268,7 @@ export function UploadPage() {
         fileName: file.name,
         docType,
         extractMode: mode,
+        fileDataUrl,
       });
     } finally {
       setProcessing(false);
@@ -365,7 +367,8 @@ export function UploadPage() {
     setOcrLoading(true);
     setLimitError('');
     try {
-      const result = await extractOnDevice(picked.name, docType);
+      const fileDataUrl = picked.type.startsWith('image/') ? await readFileDataUrl(picked) : undefined;
+      const result = await extractOnDevice({ fileName: picked.name, docType, fileDataUrl });
       const mapped = normalizeDocFields(docType, result.fields);
       setFields(mapped);
       if (result.expiryDate) setExpiryDate(result.expiryDate);
@@ -613,7 +616,7 @@ export function UploadPage() {
 
             <section className="space-y-3">
               <p className="section-label">Details</p>
-              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                 <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
                 <Select
                   label="Document type"
@@ -686,7 +689,7 @@ export function UploadPage() {
                   ]}
                 />
                 {underWarranty === 'yes' && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                     <Input
                       label="Warranty duration"
                       type="number"
@@ -716,7 +719,7 @@ export function UploadPage() {
             {fieldSchemaFor(docType).filter((f) => !(isPurchase && f.key === 'warrantyUntil')).length > 0 && (
               <section className="space-y-3">
                 <p className="section-label">Extracted fields</p>
-                <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                   {fieldSchemaFor(docType)
                     .filter((f) => !(isPurchase && f.key === 'warrantyUntil'))
                     .map((f) => (
@@ -739,11 +742,12 @@ export function UploadPage() {
               </section>
             )}
 
-            <Textarea
+            <MentionTextarea
               label="Notes (optional)"
-              placeholder="Extra details that are not standard fields for this document type"
+              placeholder="Extra details — type @ to mention family"
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={setNotes}
+              members={members}
             />
 
             <Button className="w-full" disabled={ocrLoading} onClick={() => void save()}>

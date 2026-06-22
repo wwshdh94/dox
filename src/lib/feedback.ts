@@ -80,6 +80,10 @@ export function markFeedbackRepliesRead(userId: string): void {
   );
 }
 
+export function markFeedbackReplyRead(feedbackId: string): void {
+  writeAll(readAll().map((f) => (f.id === feedbackId ? { ...f, replyRead: true } : f)));
+}
+
 export function clearFeedback(): void {
   localStorage.removeItem(FEEDBACK_KEY);
 }

@@ -5,7 +5,8 @@ import { DocTagChips } from '@/components/DocTagChips';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
-import { Input, Select, Textarea } from '@/components/Input';
+import { Input, Select } from '@/components/Input';
+import { MentionNoteText, MentionTextarea } from '@/components/MentionTextarea';
 import { Modal } from '@/components/Modal';
 import { useVaultStore } from '@/store/useVaultStore';
 import { expiryStatus, formatDate, isValidEmail } from '@/lib/format';
@@ -501,17 +502,18 @@ export function DocumentDetailPage() {
         </div>
 
         {notesOpen && canManage ? (
-          <Textarea
+          <MentionTextarea
             label="Notes"
             value={notes}
             autoFocus={!notes.trim()}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={setNotes}
             onBlur={saveNotes}
+            members={members}
           />
         ) : notes.trim() ? (
           <div className="surface-panel p-4 text-sm">
             <p className="text-xs font-semibold tracking-wide text-muted">Notes</p>
-            <p className="mt-2 whitespace-pre-wrap">{notes}</p>
+            <MentionNoteText text={notes} members={members} />
           </div>
         ) : canManage ? (
           <button

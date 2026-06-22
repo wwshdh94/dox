@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/Card';
-import { ExpiringBanner, ExpiryChip } from '@/components/ExpiryChip';
+import { ExpiryChip } from '@/components/ExpiryChip';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
@@ -12,11 +12,10 @@ import { MemberAvatar } from '@/components/MemberAvatar';
 import { docsForMemberByDomain, isHealthDomainDoc } from '@/lib/docTags';
 import { canViewDocument } from '@/lib/documentVisibility';
 import { MemberDocStats } from '@/components/MemberDocStats';
-import { dismissExpiringBanner, isExpiringBannerDismissed } from '@/lib/expiringBanner';
 import { getOwnerMember, getOtherFamilyMembers } from '@/lib/family';
 import { memberHasJoined, memberLastActiveLabel } from '@/lib/memberActivity';
 import { MemberVaultContent } from '@/features/family/MemberVaultView';
-import { PendingVerificationBanner } from '@/components/PendingVerificationBanner';
+import { VaultSearchRow, vaultSearchInputClassName } from '@/features/family/VaultSearchRow';
 import { memberFamilyDocStats } from '@/lib/memberStats';
 import { debug } from '@/lib/debug';
 
@@ -33,7 +32,6 @@ export function FamilyPage() {
   const owner = useMemo(() => getOwnerMember(members), [members]);
   const otherMembers = useMemo(() => getOtherFamilyMembers(members), [members]);
   const [search, setSearch] = useState('');
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const navigate = useNavigate();
 
   const searchResults = useMemo(() => {
@@ -60,22 +58,6 @@ export function FamilyPage() {
 
   const searching = search.trim().length > 0;
 
-  const expiringDocs = useMemo(() => {
-    const nonHealth = documents.filter((d) => !isHealthDomainDoc(d));
-    return getExpiringDocuments(nonHealth).filter((d) =>
-      canViewDocument(d, members, user, shareGrants, documents),
-    );
-  }, [documents, members, user, shareGrants]);
-
-  useEffect(() => {
-    setBannerDismissed(isExpiringBannerDismissed());
-  }, []);
-
-  const dismissExpiringBannerHandler = () => {
-    setBannerDismissed(true);
-    dismissExpiringBanner();
-  };
-
   const openDueDocuments = (memberId?: string) => {
     if (memberId) {
       navigate(`/expiring?member=${memberId}`);
@@ -97,18 +79,34 @@ export function FamilyPage() {
     return { member: m, stats, nearest };
   });
 
+  const ownerStats = useMemo(
+    () => (owner ? memberFamilyDocStats(documents, owner.id) : null),
+    [documents, owner],
+  );
+
   return (
     <div className="min-h-full pb-28">
       <Header />
       <main className="page-main animate-fade-up space-y-5">
-        <input
-          type="search"
-          placeholder="Search passport, PAN, insurance…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search documents"
-          className="min-h-11 w-full rounded-2xl border border-border bg-surface-elevated px-4 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-placeholder focus:border-accent focus:ring-2 focus:ring-accent-soft"
-        />
+        {familyHomeView === 'me' && owner ? (
+          <VaultSearchRow
+            search={search}
+            onSearchChange={setSearch}
+            member={owner}
+            documents={documents}
+            docStats={ownerStats ?? undefined}
+            onDueSoon={openDueDocuments}
+          />
+        ) : (
+          <input
+            type="search"
+            placeholder="Search passport, PAN, insurance…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search documents"
+            className={vaultSearchInputClassName}
+          />
+        )}
 
         {searching ? (
           <section className="space-y-2">
@@ -129,20 +127,12 @@ export function FamilyPage() {
           </section>
         ) : familyHomeView === 'me' ? (
           owner ? (
-            <MemberVaultContent memberId={owner.id} />
+            <MemberVaultContent memberId={owner.id} hideMemberHeader />
           ) : (
             <p className="text-sm text-muted">Add yourself during onboarding to see your vault.</p>
           )
         ) : (
           <>
-            <PendingVerificationBanner />
-            {!bannerDismissed && expiringDocs.length > 0 && (
-              <ExpiringBanner
-                count={expiringDocs.length}
-                onClick={() => openDueDocuments()}
-                onDismiss={dismissExpiringBannerHandler}
-              />
-            )}
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="section-label">Family members</p>

@@ -48,8 +48,8 @@ export function LoginPage() {
             options={[
               {
                 value: 'agree',
-                label: 'I agree to the Terms of Service and Privacy Policy',
-                hint: 'Includes consent to processing of my personal data',
+                label: 'I agree',
+                hint: 'I agree to the Terms of Service and Privacy Policy, including consent to processing of my personal data.',
               },
               { value: 'decline', label: 'I do not agree' },
             ]}

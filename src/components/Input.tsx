@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { SegmentedControl } from '@/components/SegmentedControl';
+
 const defaultLabelClass = 'text-xs font-semibold tracking-wide text-muted';
 
 export function Input({
@@ -12,11 +14,14 @@ export function Input({
   labelClassName?: string;
   wrapperClassName?: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const isDate = props.type === 'date';
   return (
-    <label className={`block ${wrapperClassName}`}>
+    <label className={`block min-w-0 ${wrapperClassName}`}>
       <span className={labelClassName}>{label}</span>
       <input
-        className="min-h-11 w-full rounded-2xl border border-border bg-surface-elevated px-4 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-placeholder focus:border-accent focus:ring-2 focus:ring-accent-soft"
+        className={`min-h-11 w-full min-w-0 max-w-full rounded-2xl border border-border bg-surface-elevated text-sm text-text shadow-sm outline-none transition-colors placeholder:text-placeholder focus:border-accent focus:ring-2 focus:ring-accent-soft ${
+          isDate ? 'px-2.5 sm:px-4 [color-scheme:light] dark:[color-scheme:dark]' : 'px-4'
+        }`}
         {...props}
       />
     </label>
@@ -66,46 +71,36 @@ export function Select({
 
 export function RadioGroup<T extends string>({
   label,
-  name,
+  name: _name,
   value,
   onChange,
   options,
+  size = 'default',
 }: {
   label: string;
   name: string;
   value: T;
   onChange: (value: T) => void;
   options: { value: T; label: string; hint?: string; disabled?: boolean }[];
+  size?: 'default' | 'compact' | 'dense';
 }) {
+  const selected = options.find((opt) => opt.value === value);
+
   return (
     <fieldset className="space-y-2">
-      <legend className="text-xs font-semibold tracking-wide text-muted">{label}</legend>
-      <div className="space-y-2">
-        {options.map((opt) => (
-          <label
-            key={opt.value}
-            className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-colors ${
-              value === opt.value
-                ? 'border-accent bg-accent-soft/40'
-                : 'border-border bg-surface-elevated'
-            } ${opt.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-          >
-            <input
-              type="radio"
-              name={name}
-              value={opt.value}
-              checked={value === opt.value}
-              disabled={opt.disabled}
-              onChange={() => onChange(opt.value)}
-              className="mt-0.5 accent-accent-ink"
-            />
-            <span className="min-w-0">
-              <span className="block text-sm font-medium">{opt.label}</span>
-              {opt.hint && <span className="mt-0.5 block text-xs text-muted">{opt.hint}</span>}
-            </span>
-          </label>
-        ))}
-      </div>
+      <legend className={defaultLabelClass}>{label}</legend>
+      <SegmentedControl
+        aria-label={label}
+        value={value}
+        onChange={onChange}
+        size={size}
+        options={options.map((opt) => ({
+          value: opt.value,
+          label: opt.label,
+          disabled: opt.disabled,
+        }))}
+      />
+      {selected?.hint ? <p className="text-xs text-muted">{selected.hint}</p> : null}
     </fieldset>
   );
 }

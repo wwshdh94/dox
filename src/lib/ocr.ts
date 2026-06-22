@@ -1,5 +1,7 @@
 import type { Document, DocType } from '@/types';
 import { emptyFieldsFor, extractExpiryDate, normalizeDocFields } from '@/lib/docFields';
+import { parseAadhaarFromText, parsePanFromText } from '@/lib/idDocParser';
+import { recognizeImageText } from '@/lib/ocrImage';
 
 export interface OcrResult {
   rawText: string;
@@ -8,16 +10,83 @@ export interface OcrResult {
   expiryDate?: string;
 }
 
-/** Mock on-device OCR — regex heuristics, no cloud */
+export interface ExtractOnDeviceOptions {
+  fileName: string;
+  docType: DocType;
+  /** data:image/... from uploaded scan */
+  fileDataUrl?: string;
+  /** Skip Tesseract — parse supplied OCR text (tests / replay) */
+  ocrText?: string;
+}
+
+/** Mock on-device OCR — Tesseract for images; regex heuristics as fallback */
 export async function extractOnDevice(
-  fileName: string,
-  docType: DocType,
+  fileNameOrOptions: string | ExtractOnDeviceOptions,
+  docTypeArg?: DocType,
 ): Promise<OcrResult> {
-  await new Promise((r) => setTimeout(r, 400));
+  const opts: ExtractOnDeviceOptions =
+    typeof fileNameOrOptions === 'string'
+      ? { fileName: fileNameOrOptions, docType: docTypeArg! }
+      : fileNameOrOptions;
+
+  const { fileName, docType } = opts;
+  let rawText = '';
+  let ocrConfidence = 0;
+
+  if (opts.ocrText) {
+    rawText = opts.ocrText;
+    ocrConfidence = 0.7;
+  } else if (opts.fileDataUrl?.startsWith('data:image/')) {
+    try {
+      const recognized = await recognizeImageText(opts.fileDataUrl);
+      rawText = recognized.text;
+      ocrConfidence = recognized.confidence;
+    } catch {
+      rawText = '';
+      ocrConfidence = 0;
+    }
+  }
+
+  if (docType === 'pan') {
+    const parsed = parsePanFromText(rawText);
+    if (parsed) {
+      const raw: Record<string, string | number> = { ...emptyFieldsFor(docType) };
+      raw.panNumber = parsed.panNumber;
+      if (parsed.fullName) raw.fullName = parsed.fullName;
+      const fields = normalizeDocFields(docType, raw);
+      const filled = Object.values(fields).filter((v) => v !== '').length;
+      return {
+        rawText: rawText || 'Parsed pan',
+        confidence: Math.max(parsed.confidence, ocrConfidence, filled > 1 ? 0.75 : 0.45),
+        fields,
+        expiryDate: extractExpiryDate(docType, raw),
+      };
+    }
+  } else if (docType === 'aadhaar') {
+    const parsed = parseAadhaarFromText(rawText);
+    if (parsed) {
+      const raw: Record<string, string | number> = { ...emptyFieldsFor(docType) };
+      raw.aadhaarNumber = parsed.aadhaarNumber;
+      if (parsed.fullName) raw.fullName = parsed.fullName;
+      if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
+      if (parsed.fathersName) raw.fathersName = parsed.fathersName;
+      const fields = normalizeDocFields(docType, raw);
+      const filled = Object.values(fields).filter((v) => v !== '').length;
+      return {
+        rawText: rawText || 'Parsed aadhaar',
+        confidence: Math.max(parsed.confidence, ocrConfidence, filled > 1 ? 0.75 : 0.45),
+        fields,
+        expiryDate: extractExpiryDate(docType, raw),
+      };
+    }
+  }
+
+  // Filename / demo fallback for other types and when OCR misses
+  await new Promise((r) => setTimeout(r, rawText ? 80 : 400));
 
   const base = fileName.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
   const raw: Record<string, string | number> = { ...emptyFieldsFor(docType) };
-  let rawText = `Scanned: ${base}`;
+  if (!rawText) rawText = `Scanned: ${base}`;
 
   if (docType === 'purchase_receipt') {
     const amountMatch = base.match(/(\d{5,7})/);
@@ -47,13 +116,15 @@ export async function extractOnDevice(
     raw.expiryDate = yearsAhead(5);
     raw.fullName = 'Passport Holder';
   } else if (docType === 'pan') {
-    raw.panNumber = 'ABCDE1234F';
-    raw.fullName = 'PAN Holder';
+    const fromName = base.match(/\b([A-Z]{5}[0-9]{4}[A-Z])\b/i);
+    raw.panNumber = fromName?.[1]?.toUpperCase() ?? '';
+    raw.fullName = base.replace(/\b[A-Z]{5}[0-9]{4}[A-Z]\b/i, '').trim() || '';
   } else if (docType === 'aadhaar') {
-    raw.aadhaarNumber = '123456789012';
-    raw.fullName = 'Aadhaar Holder';
-    raw.dateOfBirth = '1990-01-01';
-    raw.fathersName = 'Father Name';
+    const digits = base.replace(/\D/g, '');
+    raw.aadhaarNumber = digits.length === 12 ? digits : '';
+    raw.fullName = '';
+    raw.dateOfBirth = '';
+    raw.fathersName = '';
   } else if (docType === 'driving_license') {
     raw.licenseNumber = 'DL' + Math.floor(10000000000 + Math.random() * 90000000000);
     raw.fullName = 'License Holder';
@@ -100,10 +171,11 @@ export async function extractOnDevice(
   const expiryDate = extractExpiryDate(docType, raw);
   const fields = normalizeDocFields(docType, raw);
   const filled = Object.values(fields).filter((v) => v !== '').length;
+  const fallbackConfidence = filled > 1 ? 0.45 : 0.25;
 
   return {
     rawText,
-    confidence: filled > 1 ? 0.75 : 0.45,
+    confidence: rawText && ocrConfidence > 0 ? Math.max(ocrConfidence * 0.5, fallbackConfidence) : fallbackConfidence,
     fields,
     expiryDate,
   };
@@ -141,12 +213,16 @@ export function findDuplicate(
   const reg = fields.registrationNumber as string | undefined;
   const serial = fields.serialNumber as string | undefined;
   const policy = fields.policyNumber as string | undefined;
+  const pan = fields.panNumber as string | undefined;
+  const aadhaar = fields.aadhaarNumber as string | undefined;
 
   return docs.find((d) => {
     if (d.docType !== docType) return false;
     if (reg && d.fields.registrationNumber === reg) return true;
     if (serial && d.fields.serialNumber === serial) return true;
     if (policy && d.fields.policyNumber === policy) return true;
+    if (pan && d.fields.panNumber === pan) return true;
+    if (aadhaar && d.fields.aadhaarNumber === aadhaar) return true;
     return false;
   });
 }

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 
 export function Modal({
@@ -25,17 +26,21 @@ export function Modal({
   }, [open]);
 
   if (!open) return null;
+
   const overlayClass = transparent
     ? 'bg-text/45 backdrop-blur-sm'
     : 'bg-text/30 backdrop-blur-md';
   const panelClass = transparent
-    ? 'animate-fade-up relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto px-6 py-4'
-    : 'surface-panel-elevated animate-fade-up relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto bg-surface-elevated/60 p-6 backdrop-blur-md';
+    ? 'animate-fade-up relative z-10 max-h-[min(90vh,32rem)] w-full max-w-md overflow-y-auto px-6 py-4'
+    : 'surface-panel-elevated animate-fade-up relative z-10 max-h-[min(90vh,32rem)] w-full max-w-md overflow-y-auto bg-surface-elevated p-6 shadow-lg';
 
-  return (
-    <div className={`fixed inset-0 z-[60] flex items-end justify-center p-4 pb-24 sm:items-center sm:pb-4 ${overlayClass}`}>
-      <button className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className={panelClass}>
+  const content = (
+    <div
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 ${overlayClass}`}
+      role="presentation"
+    >
+      <button type="button" className="absolute inset-0" aria-label="Close" onClick={onClose} />
+      <div className={panelClass} role="dialog" aria-modal="true" aria-label={title ?? 'Dialog'}>
         {!transparent && (
           <div className={`flex items-center ${title ? 'mb-5 justify-between' : 'mb-3 justify-end'}`}>
             {title ? (
@@ -44,6 +49,7 @@ export function Modal({
               </h2>
             ) : null}
             <button
+              type="button"
               onClick={onClose}
               className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-text"
             >
@@ -55,4 +61,7 @@ export function Modal({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(content, document.body);
 }

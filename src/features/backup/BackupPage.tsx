@@ -17,7 +17,7 @@ import {
   requestGoogleAccessToken,
   uploadBackupToDrive,
 } from '@/lib/googleDrive';
-import { canUseGoogleDriveBackup } from '@/lib/planLimits';
+import { canUseVaultBackup } from '@/lib/planLimits';
 import { UpgradeHint } from '@/components/UpgradeHint';
 import { formatDate } from '@/lib/format';
 
@@ -40,7 +40,7 @@ export function BackupPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const driveReady = isGoogleDriveConfigured();
-  const driveAllowed = canUseGoogleDriveBackup(user);
+  const backupAllowed = canUseVaultBackup(user);
 
   const clearMsgs = () => {
     setMessage('');
@@ -61,6 +61,10 @@ export function BackupPage() {
 
   const handleDownloadBackup = async () => {
     clearMsgs();
+    if (!backupAllowed) {
+      setError('Backup & restore is a Pro feature.');
+      return;
+    }
     if (!validatePassphrase()) return;
     setBusy(true);
     try {
@@ -80,8 +84,8 @@ export function BackupPage() {
 
   const handleDriveBackup = async () => {
     clearMsgs();
-    if (!driveAllowed) {
-      setError('Google Drive backup is a Pro feature.');
+    if (!backupAllowed) {
+      setError('Backup & restore is a Pro feature.');
       return;
     }
     if (!driveReady) {
@@ -108,8 +112,8 @@ export function BackupPage() {
 
   const openDriveRestore = () => {
     clearMsgs();
-    if (!driveAllowed) {
-      setError('Google Drive restore is a Pro feature.');
+    if (!backupAllowed) {
+      setError('Backup & restore is a Pro feature.');
       return;
     }
     setRestoreMode('drive');
@@ -121,6 +125,10 @@ export function BackupPage() {
   const onFilePicked = (file: File | null) => {
     if (!file) return;
     clearMsgs();
+    if (!backupAllowed) {
+      setError('Backup & restore is a Pro feature.');
+      return;
+    }
     setRestoreMode('file');
     setPendingFile(file);
     setRestorePass('');
@@ -187,7 +195,11 @@ export function BackupPage() {
         {message && <p className="rounded-xl bg-success/10 px-3 py-2 text-sm text-success">{message}</p>}
         {error && <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
-        <section className="surface-panel space-y-3 p-4">
+        {!backupAllowed && (
+          <UpgradeHint message="Encrypted backup and restore (file or Google Drive) is included with Pro." />
+        )}
+
+        <section className={`surface-panel space-y-3 p-4 ${!backupAllowed ? 'opacity-60' : ''}`}>
           <p className="section-label">Create backup</p>
           <p className="text-xs text-muted">
             Choose a strong passphrase — PreVault cannot recover it if you forget. Encrypted with
@@ -207,20 +219,17 @@ export function BackupPage() {
             onChange={(e) => setConfirmPass(e.target.value)}
             autoComplete="new-password"
           />
-          <Button className="w-full" disabled={busy} onClick={() => void handleDownloadBackup()}>
+          <Button className="w-full" disabled={busy || !backupAllowed} onClick={() => void handleDownloadBackup()}>
             Download backup file (.prevaultbackup)
           </Button>
           <Button
             variant="secondary"
             className="w-full"
-            disabled={busy || !driveReady || !driveAllowed}
+            disabled={busy || !backupAllowed || !driveReady}
             onClick={() => void handleDriveBackup()}
           >
             Backup to Google Drive
           </Button>
-          {!driveAllowed && (
-            <UpgradeHint message="Google Drive sync is included with Pro. Free plan supports encrypted file download." />
-          )}
           {!driveReady && (
             <p className="text-xs text-muted">
               Google Drive: set VITE_GOOGLE_CLIENT_ID in .env (see .env.example).
@@ -228,7 +237,7 @@ export function BackupPage() {
           )}
         </section>
 
-        <section className="surface-panel space-y-3 p-4">
+        <section className={`surface-panel space-y-3 p-4 ${!backupAllowed ? 'opacity-60' : ''}`}>
           <p className="section-label">Restore vault</p>
           <p className="text-xs text-muted">
             Replaces current vault data on this device. You will need the backup passphrase.
@@ -240,13 +249,18 @@ export function BackupPage() {
             className="hidden"
             onChange={(e) => onFilePicked(e.target.files?.[0] ?? null)}
           />
-          <Button variant="secondary" className="w-full" onClick={() => fileRef.current?.click()}>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={!backupAllowed}
+            onClick={() => fileRef.current?.click()}
+          >
             Restore from backup file
           </Button>
           <Button
             variant="secondary"
             className="w-full"
-            disabled={!driveReady}
+            disabled={!backupAllowed || !driveReady}
             onClick={openDriveRestore}
           >
             Restore from Google Drive

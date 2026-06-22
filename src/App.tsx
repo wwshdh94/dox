@@ -28,6 +28,7 @@ import { BackupPage } from '@/features/backup/BackupPage';
 import { ReferralsPage } from '@/features/referrals/ReferralsPage';
 import { PlanPage } from '@/features/plan/PlanPage';
 import { FeedbackPage } from '@/features/feedback/FeedbackPage';
+import { MentionsPage } from '@/features/mentions/MentionsPage';
 import { BlockedAccountPage } from '@/features/auth/BlockedAccountPage';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { ArchivedDocumentsPage } from '@/features/documents/ArchivedDocumentsPage';
@@ -88,6 +89,7 @@ export default function App() {
           <Route path="/profile/referrals" element={<ReferralsPage />} />
           <Route path="/profile/plan" element={<PlanPage />} />
           <Route path="/profile/feedback" element={<FeedbackPage />} />
+          <Route path="/profile/mentions" element={<MentionsPage />} />
           <Route path="/blocked" element={<BlockedAccountPage />} />
           <Route path="/profile/visiting-card" element={<VisitingCardPage />} />
           <Route path="/bundles" element={<BundlesPage />} />

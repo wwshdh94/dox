@@ -19,6 +19,7 @@ import { isDocumentReviewed } from '@/lib/documentReview';
 import { canManageFamilyAccess } from '@/lib/family';
 import { appendAdminEvent } from '@/lib/adminEvents';
 import { syncPlatformHouseholdFromVault } from '@/lib/adminPlatformRegistry';
+import { syncNoteMentions } from '@/lib/noteMentions';
 import { generateInviteToken } from '@/lib/invites';
 import { inferDocTags, isHealthDomainDoc } from '@/lib/docTags';
 import {
@@ -100,7 +101,12 @@ interface VaultState {
   ) => boolean;
   processNewUpload: (
     id: string,
-    opts: { fileName: string; docType: Document['docType']; extractMode: 'manual' | 'on_device' | 'cloud' },
+    opts: {
+      fileName: string;
+      docType: Document['docType'];
+      extractMode: 'manual' | 'on_device' | 'cloud';
+      fileDataUrl?: string;
+    },
   ) => Promise<void>;
   markDocumentReviewed: (
     id: string,
@@ -779,6 +785,16 @@ export const useVaultStore = create<VaultState>()(
           }
         }
 
+        if (d.notes?.trim()) {
+          syncNoteMentions({
+            documentId: id,
+            documentTitle: d.title,
+            notes: d.notes,
+            members: get().members,
+            authorName: get().user?.name ?? 'Household',
+          });
+        }
+
         get().syncPlatformMetrics();
         return id;
       },
@@ -804,7 +820,12 @@ export const useVaultStore = create<VaultState>()(
             return;
           }
 
-          const result = await extractOnDevice(opts.fileName, opts.docType);
+          const fileDataUrl = opts.fileDataUrl ?? doc.fileDataUrl;
+          const result = await extractOnDevice({
+            fileName: opts.fileName,
+            docType: opts.docType,
+            fileDataUrl,
+          });
           const mapped = normalizeDocFields(opts.docType, result.fields);
           const docTitle = mapped.productName
             ? String(mapped.productName)
@@ -915,11 +936,21 @@ export const useVaultStore = create<VaultState>()(
       updateDocument: (id, partial) => {
         const doc = get().documents.find((d) => d.id === id);
         if (!doc || !canManageDocument(doc, get().members, get().user, get().documents)) return;
+        const nextNotes = partial.notes !== undefined ? partial.notes : doc.notes;
         set((s) => ({
           documents: s.documents.map((d) =>
             d.id === id ? { ...d, ...partial, updatedAt: new Date().toISOString() } : d,
           ),
         }));
+        if (nextNotes?.trim()) {
+          syncNoteMentions({
+            documentId: id,
+            documentTitle: partial.title ?? doc.title,
+            notes: nextNotes,
+            members: get().members,
+            authorName: get().user?.name ?? 'Household',
+          });
+        }
         get().syncPlatformMetrics();
       },
 

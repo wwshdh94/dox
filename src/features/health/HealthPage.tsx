@@ -5,7 +5,7 @@ import { ExpiryChip } from '@/components/ExpiryChip';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
-import { getExpiringDocuments, getHealthDocuments, useVaultStore } from '@/store/useVaultStore';
+import { getHealthDocuments, useVaultStore } from '@/store/useVaultStore';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { getOwnerMember } from '@/lib/family';
 import { hasEmergencyInfo } from '@/lib/health';
@@ -26,17 +26,6 @@ export function HealthPage() {
     return activeMembers;
   }, [activeMembers, familyHomeView, owner]);
   const healthDocs = useMemo(() => getHealthDocuments(allDocuments), [allDocuments]);
-  const expiringInsurance = useMemo(
-    () => {
-      const insurance = healthDocs.filter((d) => d.docType === 'health_insurance');
-      const scoped =
-        familyHomeView === 'me' && owner
-          ? insurance.filter((d) => d.memberId === owner.id)
-          : insurance;
-      return getExpiringDocuments(scoped, 60);
-    },
-    [healthDocs, familyHomeView, owner],
-  );
   const navigate = useNavigate();
 
   const memberStats = members.map((m) => {
@@ -49,19 +38,6 @@ export function HealthPage() {
     <div className="min-h-full pb-28">
       <Header />
       <main className="page-main animate-fade-up space-y-5">
-        {expiringInsurance.length > 0 && (
-          <button
-            type="button"
-            onClick={() => navigate(`/documents/${expiringInsurance[0]!.id}`)}
-            className="w-full rounded-2xl border border-warning/25 bg-warning/8 px-4 py-3.5 text-left shadow-sm transition-all hover:bg-warning/12 active:scale-[0.99]"
-          >
-            <p className="text-sm font-semibold text-warning">Insurance renewal due</p>
-            <p className="mt-0.5 text-xs text-muted">
-              {expiringInsurance.length} health polic{expiringInsurance.length === 1 ? 'y' : 'ies'} expiring within 60 days
-            </p>
-          </button>
-        )}
-
         <section className="surface-panel p-4 text-sm">
           <p className="font-semibold">Emergency-ready vault</p>
           <p className="mt-1 text-muted">

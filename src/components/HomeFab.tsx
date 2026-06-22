@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
-import { Input, Select, Textarea } from '@/components/Input';
+import { Input, Select } from '@/components/Input';
+import { MentionTextarea } from '@/components/MentionTextarea';
 import { useVaultStore } from '@/store/useVaultStore';
 import { memberSelectLabel } from '@/lib/family';
 import { uploadPathWithCamera, type UploadNavigationState } from '@/lib/uploadNavigation';
@@ -135,7 +136,13 @@ function QuickNoteModal({
             ))}
           </Select>
         )}
-        <Textarea label="Note" value={note} onChange={(e) => setNote(e.target.value)} />
+        <MentionTextarea
+          label="Note"
+          value={note}
+          onChange={setNote}
+          members={members}
+          placeholder="Reminder for @Priya about insurance renewal…"
+        />
         {saveError && <p className="text-sm text-danger">{saveError}</p>}
         <Button className="w-full" disabled={!note.trim()} onClick={save}>
           Save note
