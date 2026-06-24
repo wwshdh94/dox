@@ -61,6 +61,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
+        // OCR worker + OpenCV WASM bundles exceed Workbox's 2 MiB default precache limit.
+        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
       },
     }),
   ],
