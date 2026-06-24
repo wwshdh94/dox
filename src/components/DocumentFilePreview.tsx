@@ -214,12 +214,9 @@ export function DocumentFilePreview({
     <>
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="section-label">Original document</p>
+          <p className="section-label">Preview</p>
           <div className="flex min-w-0 items-center gap-2">
             {pageLabel && <p className="truncate text-xs text-muted">{pageLabel}</p>}
-            {fileName && pages.length === 1 && (
-              <p className="truncate text-xs text-muted">{fileName}</p>
-            )}
             {canExpand && (
               <button
                 type="button"
@@ -279,7 +276,7 @@ export function DocumentFilePreview({
 
       {fullscreen && (
         <FullscreenViewer
-          fileName={pageLabel ?? fileName}
+          fileName={pageLabel ?? 'Document preview'}
           fileDataUrl={currentUrl}
           pdf={pdf}
           image={image}

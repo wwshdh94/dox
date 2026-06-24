@@ -1,12 +1,12 @@
 # PreVault — Development Track
 
-**Last updated:** 2026-06-24 (Activity & shares filters)
+**Last updated:** 2026-06-24 (Document detail & edit UX)
 
 ## Current status
 
 **Phase:** Supabase auth + P1–P4 + **P5 account lifecycle** on Dev
 
-Full PWA with Supabase Google OAuth + server-synced family doc metadata/files encrypted per Google account (`created_by`). Build and tests pass (239 tests).
+Full PWA with Supabase Google OAuth + server-synced family doc metadata/files encrypted per Google account (`created_by`). Build and tests pass (238 tests).
 
 ## Completed
 
@@ -28,6 +28,7 @@ Full PWA with Supabase Google OAuth + server-synced family doc metadata/files en
 - [x] Production build passing
 - [x] **Bug fix:** Member detail infinite render loop — unstable Zustand selectors (`.filter()` in selector) fixed with `useMemo`; same pattern applied to Document/Asset detail pages
 - [x] Document detail: original file preview (image/PDF) from `fileDataUrl`
+- [x] **Document detail & edit UX** — progressive disclosure (CollapsibleSection), copyable primary fields, summary header; edit page with essentials + sticky save bar
 - [x] Home FAB on Family + Assets tabs — upload, add note, scan with camera
 - [x] Visual refresh — warm linen + ivory white accent (`#FFFEF9`), Instrument Serif + Plus Jakarta Sans, refined components
 - [x] **Health tab** — family health profiles, emergency card, insurance expiry, lab/Rx/vaccination records

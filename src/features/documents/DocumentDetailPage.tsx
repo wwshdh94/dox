@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DocumentFilePreview } from '@/components/DocumentFilePreview';
+import { DocumentFieldsList } from '@/components/DocumentFieldsList';
+import { DocumentSummaryHeader } from '@/components/DocumentSummaryHeader';
+import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { DocTagChips } from '@/components/DocTagChips';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
@@ -9,22 +12,14 @@ import { Input, Select } from '@/components/Input';
 import { MentionNoteText, MentionTextarea } from '@/components/MentionTextarea';
 import { Modal } from '@/components/Modal';
 import { useVaultStore } from '@/store/useVaultStore';
-import { expiryStatus, formatDate, isValidEmail } from '@/lib/format';
+import { expiryStatus, isValidEmail } from '@/lib/format';
 import { documentBackPath } from '@/lib/navigation';
-import {
-  MAX_DOCUMENT_TITLE_CHARS,
-  sanitizeDocumentNotes,
-  sanitizeDocumentTitle,
-} from '@/lib/inputLimits';
+import { sanitizeDocumentNotes } from '@/lib/inputLimits';
 import { countActiveTempLinks } from '@/lib/activityLog';
 import {
   canCreateTempLink,
   tempLinkDurationHours,
 } from '@/lib/planLimits';
-import { fieldLabelFor, normalizeDocFields } from '@/lib/docFields';
-import { suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags } from '@/lib/docTags';
-import { memberSelectLabel } from '@/lib/family';
-import type { DocType } from '@/types';
 import { canDeleteDocument, canManageDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
 import { isDocumentReviewed, isDocumentRejected, isDocumentUnderReview, isDocumentPendingDetails } from '@/lib/documentReview';
 import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
@@ -130,33 +125,6 @@ function shareDurationToOpts(duration: ShareDuration): { hours?: number; permane
   }
 }
 
-const REVIEW_DOC_TYPE_BLANK = { value: '', label: 'Choose document type…' };
-
-const HEALTH_REVIEW_DOC_TYPES: { value: DocType; label: string }[] = [
-  { value: 'health_insurance', label: 'Health insurance' },
-  { value: 'lab_report', label: 'Lab report' },
-  { value: 'prescription', label: 'Prescription' },
-  { value: 'vaccination', label: 'Vaccination' },
-  { value: 'medical_bill', label: 'Medical bill' },
-  { value: 'discharge_summary', label: 'Discharge summary' },
-];
-
-const FAMILY_REVIEW_DOC_TYPES: { value: DocType; label: string }[] = [
-  { value: 'passport', label: 'Passport' },
-  { value: 'pan', label: 'PAN' },
-  { value: 'aadhaar', label: 'Aadhaar' },
-  { value: 'driving_license', label: 'Driving license' },
-  { value: 'voter_id', label: 'Voter ID' },
-  { value: 'ration_card', label: 'Ration card' },
-  { value: 'vehicle_rc', label: 'Vehicle RC' },
-  { value: 'vehicle_puc', label: 'PUC' },
-  { value: 'vehicle_insurance', label: 'Vehicle insurance' },
-  { value: 'insurance', label: 'Insurance' },
-  { value: 'purchase_receipt', label: 'Purchase / Invoice' },
-  { value: 'warranty', label: 'Warranty card' },
-  { value: 'other', label: 'Other' },
-];
-
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const allDocuments = useVaultStore((s) => s.documents);
@@ -166,7 +134,6 @@ export function DocumentDetailPage() {
   const doc = useMemo(() => allDocuments.find((d) => d.id === id), [allDocuments, id]);
   const { fileDataUrl, additionalFileDataUrls, loading: fileLoading, error: fileError } =
     useDocumentFileUrl(doc);
-  const [reviewTitle, setReviewTitle] = useState(doc?.title ?? '');
   const members = useVaultStore((s) => s.members);
   const updateDocument = useVaultStore((s) => s.updateDocument);
   const deleteDocument = useVaultStore((s) => s.deleteDocument);
@@ -177,7 +144,6 @@ export function DocumentDetailPage() {
   const revokeShare = useVaultStore((s) => s.revokeShare);
   const viewedRef = useRef<string | null>(null);
   const [notes, setNotes] = useState('');
-  const [notesOpen, setNotesOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [shareChoiceOpen, setShareChoiceOpen] = useState(false);
@@ -207,13 +173,8 @@ export function DocumentDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (doc) {
-      const saved = doc.notes ?? '';
-      setNotes(saved);
-      setNotesOpen(Boolean(saved.trim()));
-      setReviewTitle(doc.title);
-    }
-  }, [doc?.id, doc?.title]);
+    if (doc) setNotes(doc.notes ?? '');
+  }, [doc?.id, doc?.notes]);
 
   if (!doc) {
     return (
@@ -247,31 +208,6 @@ export function DocumentDetailPage() {
   const needsDetails = isDocumentPendingDetails(doc);
   const isRejected = isDocumentRejected(doc);
   const reviewStatus = doc.reviewStatus ?? (doc.verificationStatus === 'pending' ? 'under_review' : 'reviewed');
-  const tags = resolveDocTags(doc);
-  const reviewDocTypes = tags.domain === 'health' ? HEALTH_REVIEW_DOC_TYPES : FAMILY_REVIEW_DOC_TYPES;
-  const reviewDocTypeOptions = doc.needsDocTypeSelection
-    ? [REVIEW_DOC_TYPE_BLANK, ...reviewDocTypes]
-    : reviewDocTypes;
-  const showReviewMeta = reviewStatus === 'processing' || needsReview || needsDetails || isRejected;
-
-  const handleReviewDocTypeChange = (next: DocType | '') => {
-    if (!next) return;
-    updateDocument(doc.id, {
-      docType: next,
-      fields: normalizeDocFields(next, doc.fields),
-      category: suggestedCategoryForDocType(next),
-      domain: suggestedDomainForDocType(next, {
-        memberId: doc.memberId,
-        assetId: doc.assetId,
-        uploadContext: tags.domain === 'health' ? 'health' : undefined,
-      }),
-      needsDocTypeSelection: false,
-    });
-  };
-
-  const handleReviewMemberChange = (nextMemberId: string) => {
-    updateDocument(doc.id, { memberId: nextMemberId || undefined });
-  };
   const viewer = members.find((m) => m.role === 'viewer' && m.status !== 'disabled');
   const canControlFamilyAccess = canManageDocumentFamilyAccess(doc, members, user, allDocuments);
   const canDelete = canDeleteDocument(doc, members, user, allDocuments);
@@ -283,7 +219,6 @@ export function DocumentDetailPage() {
     if (trimmed !== (doc.notes ?? '')) {
       updateDocument(doc.id, { notes: trimmed || undefined });
     }
-    if (!trimmed) setNotesOpen(false);
   };
 
   const openOneHourUrl = () => {
@@ -391,7 +326,7 @@ export function DocumentDetailPage() {
 
   return (
     <div className="flex min-h-dvh flex-col pb-28">
-      <Header title={doc.title} backFallback={backTo} />
+      <Header backFallback={backTo} />
       <main className="page-main w-full flex min-h-0 flex-1 flex-col space-y-4 animate-fade-up">
         <DocumentFilePreview
           fileName={doc.fileName}
@@ -401,330 +336,206 @@ export function DocumentDetailPage() {
           error={fileError}
         />
 
-        <div className="flex flex-wrap items-center gap-5">
-          <DocumentReviewStatus document={doc} detailed />
-          <DocTagChips doc={doc} />
-        </div>
+        <DocumentSummaryHeader
+          doc={doc}
+          members={members}
+          meta={
+            <>
+              <DocumentReviewStatus document={doc} detailed />
+              <DocTagChips doc={doc} />
+            </>
+          }
+        />
 
-        {showReviewMeta && canManage && (
-          <section className="surface-panel space-y-3 p-4">
-            <p className="section-label">Document details</p>
-            {doc.needsDocTypeSelection && (
-              <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
-                We could not recognize this document. Choose a document type below before marking reviewed.
-              </p>
+        {reviewStatus === 'processing' && (
+          <p className="rounded-xl bg-surface-elevated px-3 py-2 text-sm text-muted">
+            Processing upload — extracting fields from your file…
+          </p>
+        )}
+
+        {needsDetails && (
+          <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent-soft/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted">
+              {canManage
+                ? 'File saved. Add field details to finish.'
+                : 'Waiting for the owner to add details.'}
+            </p>
+            {canManage && (
+              <Button className="shrink-0 sm:w-auto" onClick={() => navigate(`/upload?edit=${doc.id}`)}>
+                Enter details
+              </Button>
             )}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input
-                label="Title"
-                value={reviewTitle}
-                onChange={(e) => setReviewTitle(e.target.value.slice(0, MAX_DOCUMENT_TITLE_CHARS))}
-                maxLength={MAX_DOCUMENT_TITLE_CHARS}
-                onBlur={() => {
-                  const next = sanitizeDocumentTitle(reviewTitle);
-                  if (next !== doc.title) {
-                    updateDocument(doc.id, { title: next });
-                  }
-                }}
-              />
-              <Select
-                label="Document type"
-                value={doc.needsDocTypeSelection ? '' : doc.docType}
-                onChange={(e) => handleReviewDocTypeChange(e.target.value as DocType | '')}
-              >
-                {reviewDocTypeOptions.map((t) => (
-                  <option key={t.value || 'blank'} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </Select>
-              {doc.docType !== 'purchase_receipt' && members.length > 0 && (
-                <Select
-                  label="Family member"
-                  value={doc.memberId ?? ''}
-                  onChange={(e) => handleReviewMemberChange(e.target.value)}
-                >
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {memberSelectLabel(m)}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </div>
-            <p className="text-xs text-muted">
-              {needsDetails
-                ? 'Choose type and member, then enter field values on the next screen.'
-                : 'Pre-filled from where you uploaded. Adjust before marking reviewed.'}
-            </p>
-          </section>
-        )}
-
-        {needsDetails && !canManage && (
-          <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-4 text-sm">
-            <p className="font-medium text-accent-ink">Add details</p>
-            <p className="mt-1 text-xs text-muted">
-              The document owner must enter field details before this document is added to the vault.
-            </p>
-          </div>
-        )}
-
-        {needsReview && !canManage && (
-          <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-            <p className="font-medium text-warning">Under review</p>
-            <p className="mt-1 text-xs text-muted">
-              The document owner or vault manager must review extracted details before sharing.
-            </p>
-          </div>
-        )}
-
-        {isRejected && !canManage && (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm">
-            <p className="font-medium text-danger">Rejected</p>
-            <p className="mt-1 text-xs text-muted">This document was not added to the vault.</p>
-          </div>
-        )}
-        {needsDetails && canManage && (
-          <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-4 text-sm">
-            <p className="font-medium text-accent-ink">Add details</p>
-            <p className="mt-1 text-xs text-muted">
-              Your file is saved. Enter document fields to finish adding it to your vault.
-            </p>
-            <Button className="mt-3 w-full" onClick={() => navigate(`/upload?edit=${doc.id}`)}>
-              Enter details
-            </Button>
-          </div>
-        )}
-
-        {needsReview && canManage && (
-          <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-            <p className="font-medium text-warning">Under review</p>
-            <p className="mt-1 text-xs text-muted">
-              Check the extracted details and file preview, then mark as reviewed or reject.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button
-                className="flex-1"
-                disabled={doc.needsDocTypeSelection}
-                onClick={() => {
-                  const ok = markDocumentReviewed(doc.id);
-                  if (!ok) {
-                    setShareError(
-                      doc.needsDocTypeSelection
-                        ? 'Choose a document type before marking reviewed.'
-                        : 'Could not mark as reviewed. Check your plan limits.',
-                    );
-                  }
-                }}
-              >
-                Mark reviewed
-              </Button>
-              <Button
-                variant="danger"
-                className="flex-1"
-                onClick={() => {
-                  rejectDocument(doc.id);
-                  navigate(backTo);
-                }}
-              >
-                Reject
-              </Button>
-            </div>
           </div>
         )}
 
         {isRejected && canManage && (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm">
-            <p className="font-medium text-danger">Rejected</p>
-            <p className="mt-1 text-xs text-muted">
-              This document was not added to your vault. You can delete it or edit and review again.
-            </p>
-            <Button
-              variant="secondary"
-              className="mt-3 w-full"
-              onClick={() => markDocumentReviewed(doc.id)}
-            >
-              Restore & mark reviewed
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => navigate(`/upload?edit=${doc.id}`)}>
+              Edit again
+            </Button>
+            <Button variant="secondary" className="flex-1" onClick={() => markDocumentReviewed(doc.id)}>
+              Restore
             </Button>
           </div>
         )}
 
-        {reviewStatus === 'processing' && (
-          <div className="rounded-xl border border-border bg-surface-elevated p-4 text-sm">
-            <p className="font-medium">Processing upload</p>
-            <p className="mt-1 text-xs text-muted">
-              OCR is extracting fields from your file. This usually takes a few seconds.
-            </p>
-          </div>
+        {!needsDetails && reviewStatus !== 'processing' && (
+          <DocumentFieldsList docType={doc.docType} fields={doc.fields} />
         )}
 
-        <div className="surface-panel space-y-1 p-4 text-sm">
-          <p className="text-xs font-semibold tracking-wide text-accent-ink">Encrypted</p>
-          {doc.expiryDate && (
-            <p className="mt-2">Expires {formatDate(doc.expiryDate)}</p>
-          )}
-          {Object.entries(doc.fields).map(([k, v]) => (
-            v !== '' && v != null && (
-              <p key={k} className="mt-1">
-                <span className="text-muted">{fieldLabelFor(doc.docType, k)}: </span>{String(v)}
-              </p>
-            )
-          ))}
-        </div>
-
-        {notesOpen && canManage ? (
-          <MentionTextarea
-            label="Notes"
-            value={notes}
-            autoFocus={!notes.trim()}
-            onChange={setNotes}
-            onBlur={saveNotes}
-            members={members}
-          />
-        ) : notes.trim() ? (
-          <div className="surface-panel p-4 text-sm">
-            <p className="text-xs font-semibold tracking-wide text-muted">Notes</p>
-            <MentionNoteText text={notes} members={members} />
-          </div>
-        ) : canManage ? (
-          <button
-            type="button"
-            onClick={() => setNotesOpen(true)}
-            className="w-full rounded-2xl border border-dashed border-border-soft bg-surface px-4 py-3.5 text-left text-sm text-muted transition-colors hover:border-border hover:bg-surface-elevated active:scale-[0.99]"
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            className="min-w-0 flex-[3]"
+            onClick={() => setShareChoiceOpen(true)}
+            disabled={!canShare}
           >
-            Tap to add notes
-          </button>
-        ) : null}
-
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <div className="flex w-1/2 min-w-0 gap-2">
-              <Button
-                variant="secondary"
-                className="min-w-0 flex-1"
-                onClick={() => setShareChoiceOpen(true)}
-                disabled={!canShare}
-              >
-                Share
-              </Button>
-              <Button
-                variant="secondary"
-                className="min-w-0 flex-1"
-                onClick={() => navigate(`/upload?edit=${doc.id}`)}
-                disabled={!canManage}
-              >
-                Edit
-              </Button>
-            </div>
+            Share
+          </Button>
+          <Button
+            variant="secondary"
+            className="min-w-0 flex-[3]"
+            onClick={() => navigate(`/upload?edit=${doc.id}`)}
+            disabled={!canManage}
+          >
+            Edit
+          </Button>
+          <div
+            className={`flex min-h-11 min-w-0 flex-[4] items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 text-sm font-semibold tracking-tight shadow-sm ${
+              minorManaged && !canControlFamilyAccess ? 'opacity-60' : viewer && canControlFamilyAccess ? '' : 'opacity-60'
+            }`}
+            title={
+              minorManaged && !canControlFamilyAccess
+                ? 'Ask a parent or guardian to change family access'
+                : !canControlFamilyAccess
+                  ? 'Only the vault owner, document owner, or parent/guardian can change family access'
+                  : viewer
+                    ? familyAccessEnabled
+                      ? `${viewer.displayName} can view in Family tab`
+                      : `Share with ${viewer.displayName} in Family tab`
+                    : 'Add a family viewer in Profile → Family members'
+            }
+          >
+            <span className="truncate text-text">Family</span>
             {minorManaged && !canControlFamilyAccess ? (
-            <div
-              className="flex min-h-11 w-1/2 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 opacity-60 shadow-sm"
-              title="Ask a parent or guardian to change family access or delete this document"
-            >
-              <span className="text-sm font-semibold tracking-tight text-text">Family access</span>
-              <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs font-semibold text-muted">Locked</span>
+            ) : (
+              <div className="flex shrink-0 items-center gap-1.5">
                 <span
-                  className={`text-[10px] font-bold uppercase tracking-wide ${
-                    familyAccessEnabled ? 'text-success' : 'text-muted'
-                  }`}
+                  className={`text-xs font-semibold ${familyAccessEnabled ? 'text-success' : 'text-muted'}`}
                 >
                   {familyAccessEnabled ? 'On' : 'Off'}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                  Parent only
-                </span>
+                <button
+                  type="button"
+                  disabled={!viewer || !canControlFamilyAccess}
+                  onClick={() => {
+                    if (!viewer || !canControlFamilyAccess) return;
+                    if (familyAccessEnabled) revokeShare(doc.id, viewer.id);
+                    else addShareGrant(doc.id, viewer.id);
+                  }}
+                  className={`relative h-7 w-12 shrink-0 rounded-full transition-all duration-200 ${
+                    familyAccessEnabled ? 'bg-success shadow-sm ring-2 ring-success/35' : 'bg-border'
+                  } ${!viewer || !canControlFamilyAccess ? 'cursor-not-allowed' : ''}`}
+                  aria-pressed={familyAccessEnabled}
+                  aria-label="Toggle family access"
+                >
+                  <span
+                    className={`absolute top-0.5 h-6 w-6 rounded-full shadow-md transition-all duration-200 ${
+                      familyAccessEnabled ? 'left-[1.375rem] bg-white' : 'left-0.5 bg-surface-elevated'
+                    }`}
+                  />
+                </button>
               </div>
-            </div>
-          ) : (
-          <div
-            className={`flex min-h-11 w-1/2 min-w-0 items-center justify-between gap-2 rounded-2xl border border-border bg-surface-elevated px-4 py-2.5 shadow-sm ${
-              viewer && canControlFamilyAccess ? '' : 'opacity-60'
-            }`}
-            title={
-              !canControlFamilyAccess
-                ? 'Only the vault owner (until member joins), document owner, or parent/guardian can change family access'
-                : viewer
-                  ? familyAccessEnabled
-                    ? `${viewer.displayName} can view in Family tab`
-                    : `Share with ${viewer.displayName} in Family tab`
-                  : 'Add a family viewer in Profile → Family members'
-            }
-          >
-            <span className="text-sm font-semibold tracking-tight text-text">Family access</span>
-            <div className="flex items-center gap-2">
-              <span
-                className={`text-[10px] font-bold uppercase tracking-wide ${
-                  familyAccessEnabled ? 'text-success' : 'text-muted'
-                }`}
-              >
-                {familyAccessEnabled ? 'On' : 'Off'}
-              </span>
-              <button
-                type="button"
-                disabled={!viewer || !canControlFamilyAccess}
-                onClick={() => {
-                  if (!viewer || !canControlFamilyAccess) return;
-                  if (familyAccessEnabled) revokeShare(doc.id, viewer.id);
-                  else addShareGrant(doc.id, viewer.id);
-                }}
-                className={`relative h-7 w-12 shrink-0 rounded-full transition-all duration-200 ${
-                  familyAccessEnabled
-                    ? 'bg-success shadow-sm ring-2 ring-success/35'
-                    : 'bg-border'
-                } ${!viewer || !canControlFamilyAccess ? 'cursor-not-allowed' : ''}`}
-                aria-pressed={familyAccessEnabled}
-                aria-label="Toggle family access"
-              >
-                <span
-                  className={`absolute top-0.5 h-6 w-6 rounded-full shadow-md transition-all duration-200 ${
-                    familyAccessEnabled ? 'left-[1.375rem] bg-white' : 'left-0.5 bg-surface-elevated'
-                  }`}
-                />
-              </button>
-            </div>
+            )}
           </div>
-          )}
-          </div>
-          {renewalEligible && canManage && (
-            <Button variant="secondary" className="w-full" onClick={() => markRenewed(doc.id)}>
-              Mark renewed
-            </Button>
-          )}
         </div>
+
+        {needsReview && canManage && (
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              disabled={doc.needsDocTypeSelection}
+              onClick={() => {
+                const ok = markDocumentReviewed(doc.id);
+                if (!ok) {
+                  setShareError(
+                    doc.needsDocTypeSelection
+                      ? 'Choose a document type in Edit before marking reviewed.'
+                      : 'Could not mark as reviewed. Check your plan limits.',
+                  );
+                }
+              }}
+            >
+              Mark reviewed
+            </Button>
+            <Button
+              variant="danger"
+              className="flex-1"
+              onClick={() => {
+                rejectDocument(doc.id);
+                navigate(backTo);
+              }}
+            >
+              Reject
+            </Button>
+          </div>
+        )}
+
+        {canManage ? (
+          <CollapsibleSection
+            title="Notes"
+            subtitle={notes.trim() ? 'Tap to view or edit' : 'Optional — type @ to mention family'}
+            defaultOpen={Boolean(notes.trim())}
+          >
+            <MentionTextarea
+              label="Notes"
+              value={notes}
+              onChange={setNotes}
+              onBlur={saveNotes}
+              members={members}
+            />
+          </CollapsibleSection>
+        ) : notes.trim() ? (
+          <CollapsibleSection title="Notes" defaultOpen>
+            <MentionNoteText text={notes} members={members} />
+          </CollapsibleSection>
+        ) : null}
+
+        {canManage && (
+          <div className="space-y-2">
+            {renewalEligible && (
+              <Button variant="secondary" className="w-full" onClick={() => markRenewed(doc.id)}>
+                Mark renewed
+              </Button>
+            )}
+            <Link to="/profile/activity" className="block text-center text-xs font-medium text-accent-ink">
+              Manage active links & activity →
+            </Link>
+          </div>
+        )}
 
         {shareError && <p className="text-sm text-danger">{shareError}</p>}
         {canManage && !canShare && (
           <UpgradeHint message="Free plan allows 2 active temp links. Pro extends link duration to 24 hours." />
         )}
 
-        <div className="min-h-4 flex-1" aria-hidden="true" />
-
-        <Link
-          to="/profile/activity"
-          className="block text-center text-xs font-medium text-accent-ink"
-        >
-          Manage active links & activity →
-        </Link>
-
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            className="w-full"
-            disabled={!canManage}
-            onClick={() => setArchiveOpen(true)}
-          >
-            Archive
-          </Button>
-          <Button
-            variant="danger"
-            className="w-full"
-            disabled={!canDelete}
-            title={!canDelete ? 'Ask a parent or guardian to delete this document' : undefined}
-            onClick={() => setDeleteOpen(true)}
-          >
-            Delete
-          </Button>
-        </div>
+        {canManage && (
+          <div className="flex gap-2 pt-2">
+            <Button variant="secondary" className="w-full" onClick={() => setArchiveOpen(true)}>
+              Archive
+            </Button>
+            <Button
+              variant="danger"
+              className="w-full"
+              disabled={!canDelete}
+              title={!canDelete ? 'Ask a parent or guardian to delete this document' : undefined}
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete
+            </Button>
+          </div>
+        )}
       </main>
 
       <Modal open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archive document?">

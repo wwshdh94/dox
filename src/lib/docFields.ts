@@ -147,6 +147,71 @@ export function primaryRevealValue(
   return value ? String(value) : undefined;
 }
 
+const FIELD_PRIORITY = [
+  'fullName',
+  'ownerName',
+  'registrationNumber',
+  'expiryDate',
+  'validTill',
+  'renewalDate',
+  'productName',
+  'policyNumber',
+  'insurer',
+  'provider',
+];
+
+/** Up to 5 fields shown by default on document detail. */
+export function primaryFieldKeys(docType: DocType): string[] {
+  const schema = fieldSchemaFor(docType);
+  if (schema.length === 0) return [];
+
+  const keys: string[] = [];
+  const push = (key: string) => {
+    if (keys.includes(key)) return;
+    if (!schema.some((f) => f.key === key)) return;
+    keys.push(key);
+  };
+
+  const reveal = primaryRevealField(docType);
+  if (reveal) push(reveal);
+  for (const key of FIELD_PRIORITY) push(key);
+  for (const field of schema) push(field.key);
+  return keys.slice(0, 5);
+}
+
+export function secondaryFieldKeys(docType: DocType): string[] {
+  const primary = new Set(primaryFieldKeys(docType));
+  return fieldSchemaFor(docType)
+    .map((f) => f.key)
+    .filter((key) => !primary.has(key));
+}
+
+export const DOC_TYPE_LABELS: Record<DocType, string> = {
+  passport: 'Passport',
+  pan: 'PAN',
+  aadhaar: 'Aadhaar',
+  driving_license: 'Driving license',
+  voter_id: 'Voter ID',
+  ration_card: 'Ration card',
+  vehicle_rc: 'Vehicle RC',
+  vehicle_puc: 'PUC',
+  vehicle_insurance: 'Vehicle insurance',
+  insurance: 'Insurance',
+  health_insurance: 'Health insurance',
+  lab_report: 'Lab report',
+  prescription: 'Prescription',
+  vaccination: 'Vaccination',
+  medical_bill: 'Medical bill',
+  discharge_summary: 'Discharge summary',
+  purchase_receipt: 'Purchase / Invoice',
+  warranty: 'Warranty card',
+  other: 'Other',
+};
+
+export function docTypeLabel(docType: DocType): string {
+  return DOC_TYPE_LABELS[docType] ?? docType;
+}
+
 /** Keep only schema keys; coerce values to strings for form state. */
 export function normalizeDocFields(
   docType: DocType,

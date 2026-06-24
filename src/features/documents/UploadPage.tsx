@@ -15,7 +15,7 @@ import { autoPrepareImageFile } from '@/lib/imagePipeline';
 import { compressImageFile } from '@/lib/imageCompress';
 import { inferDocTags, CATEGORY_LABELS, DOC_CATEGORIES, DOC_DOMAINS, DOMAIN_LABELS, suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags } from '@/lib/docTags';
 import { memberSelectLabel } from '@/lib/family';
-import { emptyFieldsFor, fieldSchemaFor, normalizeDocFields, documentExpiryFromFields, computeWarrantyEndDate, usesFieldBasedExpiry } from '@/lib/docFields';
+import { emptyFieldsFor, fieldSchemaFor, normalizeDocFields, documentExpiryFromFields, computeWarrantyEndDate, usesFieldBasedExpiry, primaryFieldKeys } from '@/lib/docFields';
 import { formatDate } from '@/lib/format';
 import { uploadBackPath } from '@/lib/navigation';
 import { remainingUploads } from '@/lib/referrals';
@@ -50,6 +50,7 @@ import {
 } from '@/lib/ocrRecognition';
 import { ImageEditor } from '@/components/ImageEditor';
 import { DocumentFilePreview } from '@/components/DocumentFilePreview';
+import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
 import { useVaultStore } from '@/store/useVaultStore';
 import type { DocCategory, DocDomain, DocType } from '@/types';
@@ -650,6 +651,38 @@ export function UploadPage() {
         ? 'Add health record'
         : 'Add document';
 
+  const storedEditType = storageDocType(docType);
+  const editFieldDefs = fieldSchemaFor(storedEditType).filter(
+    (field) => !(isPurchase && field.key === 'warrantyUntil'),
+  );
+  const editPrimaryKeySet = new Set(primaryFieldKeys(storedEditType));
+
+  const updateEditField = (key: string, value: string) => {
+    const next = { ...fields, [key]: value };
+    setFields(next);
+    if (usesFieldBasedExpiry(storedEditType)) {
+      const mapped = documentExpiryFromFields(storedEditType, next);
+      if (mapped) setExpiryDate(mapped);
+    }
+  };
+
+  const renderEditField = (field: (typeof editFieldDefs)[number]) => (
+    <Input
+      key={field.key}
+      label={field.label}
+      type={field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text'}
+      value={fields[field.key] ?? ''}
+      onChange={(e) => updateEditField(field.key, e.target.value)}
+    />
+  );
+
+  const saveLabel =
+    editingDoc && isDocumentPendingDetails(editingDoc)
+      ? 'Save document'
+      : needsValidation
+        ? 'Validate and save'
+        : 'Save changes';
+
   if (isEdit && !editingDoc) {
     return (
       <div className="min-h-full pb-28">
@@ -680,7 +713,13 @@ export function UploadPage() {
   }
 
   return (
-    <div className="min-h-full pb-28">
+    <div
+      className={`min-h-full ${
+        step === 'verify' && isEdit
+          ? 'pb-[calc(5.5rem+max(1rem,env(safe-area-inset-bottom,0px)))]'
+          : 'pb-28'
+      }`}
+    >
       <Header title={pageTitle} backFallback={backTo} />
       <main className="page-main animate-fade-up space-y-4">
         {user?.plan === 'free' && uploadsLeft !== null && (
@@ -914,39 +953,12 @@ export function UploadPage() {
               error={storedFileError}
             />
 
-            <label className="surface-panel flex min-h-28 cursor-pointer flex-col items-center justify-center border-2 border-dashed border-accent/35 bg-accent-soft/30 p-4 text-center">
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                className="hidden"
-                onChange={(e) => void handleReplacePick(e.target.files?.[0] ?? null)}
-              />
-              <p className="text-sm font-semibold text-text">Replace document</p>
-              <p className="mt-1 text-xs text-muted">
-                {file
-                  ? `Selected: ${file.name}`
-                  : editingDoc.fileName
-                    ? `Current: ${editingDoc.fileName}`
-                    : 'Tap to choose a new photo or PDF'}
+            {(needsValidation || isDocumentPendingDetails(editingDoc)) && !ocrLoading && (
+              <p className="rounded-xl bg-accent-soft/80 px-3 py-2 text-xs text-muted">
+                {processingEnabled && !isDocumentPendingDetails(editingDoc)
+                  ? 'Check extracted fields against the preview, then save.'
+                  : 'Fill in the fields below to add this document to your vault.'}
               </p>
-              <p className="mt-1 text-[0.65rem] text-muted">
-                Images open in the editor first — then we scan and compress automatically
-              </p>
-            </label>
-
-            {(needsValidation || (editingDoc && isDocumentPendingDetails(editingDoc))) && !ocrLoading && (
-              <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
-                <p className="font-medium text-text">
-                  {processingEnabled && !isDocumentPendingDetails(editingDoc)
-                    ? 'Review scan results'
-                    : 'Enter document details'}
-                </p>
-                <p className="mt-1 text-xs text-muted">
-                  {processingEnabled && !isDocumentPendingDetails(editingDoc)
-                    ? 'Check extracted fields below, update anything incorrect, then validate and save.'
-                    : 'Fill in the fields below, then save to add this document to your vault.'}
-                </p>
-              </div>
             )}
 
             {duplicate && (
@@ -957,12 +969,12 @@ export function UploadPage() {
 
             {needsDocTypeSelection && (
               <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
-                We could not recognize this document. Choose a document type below, then save.
+                Choose a document type below, then save.
               </p>
             )}
 
-            <section className="space-y-3">
-              <p className="section-label">Details</p>
+            <section className="surface-panel space-y-3 p-4">
+              <p className="section-label">Essentials</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                 <Input
                   label="Title"
@@ -981,44 +993,55 @@ export function UploadPage() {
                     </option>
                   ))}
                 </Select>
-                {storageDocType(docType) !== 'purchase_receipt' && members.length > 0 && (
+                {storedEditType !== 'purchase_receipt' && members.length > 0 && (
                   <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
                     {members.map((m) => (
                       <option key={m.id} value={m.id}>{memberSelectLabel(m)}</option>
                     ))}
                   </Select>
                 )}
-                <Select
-                  label="Tab tag"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value as DocDomain)}
-                >
+              </div>
+            </section>
+
+            {editFieldDefs.length > 0 && (
+              <section className="space-y-3">
+                <p className="section-label">
+                  {isDocumentPendingDetails(editingDoc) ? 'Document fields' : 'Extracted fields'}
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+                  {editFieldDefs.filter((field) => editPrimaryKeySet.has(field.key)).map(renderEditField)}
+                </div>
+                {editFieldDefs.some((field) => !editPrimaryKeySet.has(field.key)) && (
+                  <CollapsibleSection title="More fields" defaultOpen={false}>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+                      {editFieldDefs.filter((field) => !editPrimaryKeySet.has(field.key)).map(renderEditField)}
+                    </div>
+                  </CollapsibleSection>
+                )}
+              </section>
+            )}
+
+            <CollapsibleSection title="Organize" subtitle="Tags, asset link, expiry" defaultOpen={false}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+                <Select label="Tab tag" value={domain} onChange={(e) => setDomain(e.target.value as DocDomain)}>
                   {DOC_DOMAINS.map((d) => (
                     <option key={d} value={d}>{DOMAIN_LABELS[d]}</option>
                   ))}
                 </Select>
-                <Select
-                  label="Category tag"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as DocCategory)}
-                >
+                <Select label="Category tag" value={category} onChange={(e) => setCategory(e.target.value as DocCategory)}>
                   {DOC_CATEGORIES.map((c) => (
                     <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
                   ))}
                 </Select>
                 {showAssetLink && (
-                  <Select
-                    label="Linked asset"
-                    value={editAssetId}
-                    onChange={(e) => setEditAssetId(e.target.value)}
-                  >
+                  <Select label="Linked asset" value={editAssetId} onChange={(e) => setEditAssetId(e.target.value)}>
                     <option value="">None</option>
                     {assets.map((a) => (
                       <option key={a.id} value={a.id}>{a.label}</option>
                     ))}
                   </Select>
                 )}
-                {!usesFieldBasedExpiry(storageDocType(docType)) && (
+                {!usesFieldBasedExpiry(storedEditType) && (
                   <Input
                     label="Expiry date"
                     type="date"
@@ -1027,105 +1050,95 @@ export function UploadPage() {
                   />
                 )}
               </div>
-            </section>
+            </CollapsibleSection>
 
             {isPurchase && (
-              <section className="space-y-3">
-                <p className="section-label">Warranty</p>
-                <RadioGroup
-                  label="Under warranty?"
-                  name="underWarrantyEdit"
-                  value={underWarranty}
-                  onChange={(v) => setUnderWarranty(v as 'yes' | 'no')}
-                  options={[
-                    { value: 'yes', label: 'Yes' },
-                    { value: 'no', label: 'No' },
-                  ]}
-                />
-                {underWarranty === 'yes' && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-                    <Input
-                      label="Warranty duration"
-                      type="number"
-                      min={1}
-                      value={warrantyDuration}
-                      onChange={(e) => setWarrantyDuration(e.target.value)}
-                    />
-                    <Select
-                      label="Unit"
-                      value={warrantyUnit}
-                      onChange={(e) => setWarrantyUnit(e.target.value as 'months' | 'years')}
-                    >
-                      <option value="months">Months</option>
-                      <option value="years">Years</option>
-                    </Select>
-                  </div>
-                )}
-                {underWarranty === 'yes' && fields.warrantyUntil && (
-                  <p className="text-sm text-muted">
-                    Warranty valid until:{' '}
-                    <span className="font-medium text-text">{formatDate(fields.warrantyUntil)}</span>
-                  </p>
-                )}
-              </section>
-            )}
-
-            {fieldSchemaFor(storageDocType(docType)).filter((f) => !(isPurchase && f.key === 'warrantyUntil')).length > 0 && (
-              <section className="space-y-3">
-                <p className="section-label">
-                  {editingDoc && isDocumentPendingDetails(editingDoc) ? 'Document fields' : 'Extracted fields'}
-                </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-                  {fieldSchemaFor(storageDocType(docType))
-                    .filter((f) => !(isPurchase && f.key === 'warrantyUntil'))
-                    .map((f) => (
+              <CollapsibleSection title="Warranty" defaultOpen={underWarranty === 'yes'}>
+                <div className="space-y-3">
+                  <RadioGroup
+                    label="Under warranty?"
+                    name="underWarrantyEdit"
+                    value={underWarranty}
+                    onChange={(v) => setUnderWarranty(v as 'yes' | 'no')}
+                    options={[
+                      { value: 'yes', label: 'Yes' },
+                      { value: 'no', label: 'No' },
+                    ]}
+                  />
+                  {underWarranty === 'yes' && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
                       <Input
-                        key={f.key}
-                        label={f.label}
-                        type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
-                        value={fields[f.key] ?? ''}
-                        onChange={(e) => {
-                          const stored = storageDocType(docType);
-                          const next = { ...fields, [f.key]: e.target.value };
-                          setFields(next);
-                          if (usesFieldBasedExpiry(stored)) {
-                            const mapped = documentExpiryFromFields(stored, next);
-                            if (mapped) setExpiryDate(mapped);
-                          }
-                        }}
+                        label="Warranty duration"
+                        type="number"
+                        min={1}
+                        value={warrantyDuration}
+                        onChange={(e) => setWarrantyDuration(e.target.value)}
                       />
-                    ))}
+                      <Select
+                        label="Unit"
+                        value={warrantyUnit}
+                        onChange={(e) => setWarrantyUnit(e.target.value as 'months' | 'years')}
+                      >
+                        <option value="months">Months</option>
+                        <option value="years">Years</option>
+                      </Select>
+                    </div>
+                  )}
+                  {underWarranty === 'yes' && fields.warrantyUntil && (
+                    <p className="text-sm text-muted">
+                      Warranty valid until:{' '}
+                      <span className="font-medium text-text">{formatDate(fields.warrantyUntil)}</span>
+                    </p>
+                  )}
                 </div>
-              </section>
+              </CollapsibleSection>
             )}
 
-            <MentionTextarea
-              label="Notes (optional)"
-              placeholder="Extra details — type @ to mention family"
-              value={notes}
-              onChange={setNotes}
-              members={members}
-            />
+            <CollapsibleSection title="Replace file" subtitle={editingDoc.fileName ?? 'Upload a new photo or PDF'} defaultOpen={false}>
+              <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-accent/35 bg-accent-soft/30 p-4 text-center">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => void handleReplacePick(e.target.files?.[0] ?? null)}
+                />
+                <p className="text-sm font-semibold text-text">
+                  {file ? `Selected: ${file.name}` : 'Choose new file'}
+                </p>
+                <p className="mt-1 text-xs text-muted">Images open in the editor before save</p>
+              </label>
+            </CollapsibleSection>
 
-            <Button
-              className="w-full"
-              disabled={ocrLoading || needsDocTypeSelection || docType === ''}
-              onClick={() => void save()}
-            >
-              {editingDoc && isDocumentPendingDetails(editingDoc)
-                ? 'Save document'
-                : needsValidation
-                  ? 'Validate and save'
-                  : 'Save changes'}
-            </Button>
-            <Button variant="ghost" className="w-full" onClick={() => navigate(backTo)}>
-              Cancel
-            </Button>
+            <CollapsibleSection title="Notes" subtitle="Optional — type @ to mention family" defaultOpen={Boolean(notes.trim())}>
+              <MentionTextarea
+                label="Notes"
+                placeholder="Extra details — type @ to mention family"
+                value={notes}
+                onChange={setNotes}
+                members={members}
+              />
+            </CollapsibleSection>
           </>
         )}
 
       </main>
-      <BottomNav />
+      {step === 'verify' && isEdit && editingDoc && (
+        <div className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface/95 px-4 py-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur supports-[backdrop-filter]:bg-surface/90">
+          <div className="mx-auto flex max-w-lg gap-2">
+            <Button variant="ghost" className="shrink-0 px-4" onClick={() => navigate(backTo)}>
+              Cancel
+            </Button>
+            <Button
+              className="min-w-0 flex-1"
+              disabled={ocrLoading || needsDocTypeSelection || docType === ''}
+              onClick={() => void save()}
+            >
+              {saveLabel}
+            </Button>
+          </div>
+        </div>
+      )}
+      {!(step === 'verify' && isEdit) && <BottomNav />}
       <LoadingOverlay
         open={ocrLoading || processing}
         label={
