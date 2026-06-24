@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { DocType } from '@/types';
+import type { DocFields, DocType } from '@/types';
 import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { fieldLabelFor, primaryFieldKeys, secondaryFieldKeys } from '@/lib/docFields';
 import { formatDate, maskAadhaar } from '@/lib/format';
@@ -50,7 +50,7 @@ export function DocumentFieldsList({
   hapticsEnabled = true,
 }: {
   docType: DocType;
-  fields: Record<string, string>;
+  fields: DocFields;
   hapticsEnabled?: boolean;
 }) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -70,14 +70,15 @@ export function DocumentFieldsList({
     keys
       .map((key) => {
         const raw = fields[key];
-        if (!raw) return null;
+        if (raw == null || raw === '') return null;
+        const value = String(raw);
         return (
           <FieldRow
             key={key}
             label={fieldLabelFor(docType, key)}
-            value={displayFieldValue(docType, key, raw)}
+            value={displayFieldValue(docType, key, value)}
             copied={copiedKey === key}
-            onCopy={() => void copyValue(key, raw)}
+            onCopy={() => void copyValue(key, value)}
           />
         );
       })

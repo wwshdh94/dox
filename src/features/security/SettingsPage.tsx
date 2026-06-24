@@ -3,6 +3,7 @@ import { RadioGroup } from '@/components/Input';
 import { useVaultStore } from '@/store/useVaultStore';
 import { canUseCloudAi } from '@/lib/planLimits';
 import { isDocumentProcessingEnabled } from '@/lib/documentProcessing';
+import { getFamilyViewerMember } from '@/lib/defaultFamilyShare';
 import { UpgradeHint } from '@/components/UpgradeHint';
 
 type ReminderMode = 'push' | 'off';
@@ -16,9 +17,12 @@ function reminderMode(settings: { pushReminders: boolean }): ReminderMode {
 export function SettingsPage() {
   const settings = useVaultStore((s) => s.settings);
   const user = useVaultStore((s) => s.user);
+  const members = useVaultStore((s) => s.members);
   const setSettings = useVaultStore((s) => s.setSettings);
   const cloudAllowed = canUseCloudAi(user);
   const processingEnabled = isDocumentProcessingEnabled(settings);
+  const familyViewer = getFamilyViewerMember(members);
+  const defaultFamilyShare = settings.defaultFamilyShare === true;
 
   const applyReminders = (mode: ReminderMode) => {
     setSettings({ pushReminders: mode === 'push' });
@@ -54,6 +58,38 @@ export function SettingsPage() {
                 { value: 'off', label: 'Off', hint: 'No expiry reminders' },
               ]}
             />
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <p className="section-label">Family sharing</p>
+          <div className="surface-panel p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-medium text-text">Share new documents with family</p>
+                <p className="text-xs text-muted">
+                  {familyViewer
+                    ? `Turn on family access by default when you save a document. ${familyViewer.displayName} can still be toggled per document.`
+                    : 'Add a joined family member in Profile → Family to use default sharing.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={!familyViewer}
+                onClick={() => setSettings({ defaultFamilyShare: !defaultFamilyShare })}
+                className={`relative mt-0.5 h-7 w-12 shrink-0 rounded-full transition-all duration-200 ${
+                  defaultFamilyShare ? 'bg-success shadow-sm ring-2 ring-success/35' : 'bg-border'
+                } ${!familyViewer ? 'cursor-not-allowed opacity-50' : ''}`}
+                aria-pressed={defaultFamilyShare}
+                aria-label="Default family sharing for new documents"
+              >
+                <span
+                  className={`absolute top-0.5 h-6 w-6 rounded-full shadow-md transition-all duration-200 ${
+                    defaultFamilyShare ? 'left-[1.375rem] bg-white' : 'left-0.5 bg-surface-elevated'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

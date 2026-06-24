@@ -88,7 +88,7 @@ export function backupStepsForMode(mode: 'drive' | 'file', phase: BackupPhase): 
     if (errored && idx === activeIdx) status = 'error';
     else if (activeIdx >= 0 && idx < activeIdx) status = 'done';
     else if (idx === activeIdx) status = 'active';
-    return { id, label: BACKUP_LABELS[id], status };
+    return { id, label: BACKUP_LABELS[id as keyof typeof BACKUP_LABELS], status };
   });
 }
 
@@ -101,7 +101,7 @@ export function restoreSteps(phase: RestorePhase): ProgressStep[] {
     if (errored && idx === activeIdx) status = 'error';
     else if (activeIdx >= 0 && idx < activeIdx) status = 'done';
     else if (idx === activeIdx) status = 'active';
-    return { id, label: RESTORE_LABELS[id], status };
+    return { id, label: RESTORE_LABELS[id as keyof typeof RESTORE_LABELS], status };
   });
 }
 

@@ -287,6 +287,8 @@ export interface AppSettings {
   welcomeSeen?: boolean;
   /** Browsing with seeded preview data before Google sign-in */
   guestExplore?: boolean;
+  /** When true, new reviewed documents get family access for the joined viewer by default. */
+  defaultFamilyShare?: boolean;
 }
 
 export interface ShareGrant {

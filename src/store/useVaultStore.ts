@@ -16,7 +16,9 @@ import type {
 import { uid } from '@/lib/format';
 import { canDeleteDocument, canManageDocument, canManageDocumentFamilyAccess } from '@/lib/documentVisibility';
 import { isDocumentReviewed } from '@/lib/documentReview';
+import { defaultFamilyShareGrantTarget } from '@/lib/defaultFamilyShare';
 import { canManageFamilyAccess, getOwnerMember } from '@/lib/family';
+import { appendAdminEvent } from '@/lib/adminEvents';
 import { clearGoogleDriveAccessTokenCache } from '@/lib/googleDrive';
 import { syncPlatformHouseholdFromVault } from '@/lib/adminPlatformRegistry';
 import { syncNoteMentions } from '@/lib/noteMentions';
@@ -236,6 +238,24 @@ function shareActor(state: Pick<VaultState, 'user' | 'members'>): { memberId?: s
     memberId: owner?.id,
     name: owner?.displayName ?? state.user?.name ?? 'You',
   };
+}
+
+function tryApplyDefaultFamilyShare(
+  get: () => VaultState,
+  documentId: string,
+): void {
+  const state = get();
+  const doc = state.documents.find((d) => d.id === documentId);
+  if (!doc) return;
+  const memberId = defaultFamilyShareGrantTarget(
+    doc,
+    state.settings,
+    state.members,
+    state.user,
+    state.documents,
+    state.shareGrants,
+  );
+  if (memberId) get().addShareGrant(documentId, memberId);
 }
 
 export const useVaultStore = create<VaultState>()(
@@ -1029,6 +1049,9 @@ export const useVaultStore = create<VaultState>()(
 
         get().syncPlatformMetrics();
         pushDocById(get, id);
+        if (status === 'reviewed') {
+          tryApplyDefaultFamilyShare(get, id);
+        }
         return id;
       },
 
@@ -1183,6 +1206,7 @@ export const useVaultStore = create<VaultState>()(
 
         get().syncPlatformMetrics();
         pushDocById(get, id);
+        tryApplyDefaultFamilyShare(get, id);
         return true;
       },
 
@@ -1225,6 +1249,7 @@ export const useVaultStore = create<VaultState>()(
           );
         }
 
+        const wasReviewed = isDocumentReviewed(doc);
         const nextNotes = patch.notes !== undefined ? patch.notes : doc.notes;
         set((s) => ({
           documents: s.documents.map((d) =>
@@ -1242,6 +1267,10 @@ export const useVaultStore = create<VaultState>()(
         }
         get().syncPlatformMetrics();
         pushDocById(get, id);
+        const updated = get().documents.find((d) => d.id === id);
+        if (updated && !wasReviewed && isDocumentReviewed(updated)) {
+          tryApplyDefaultFamilyShare(get, id);
+        }
       },
 
       deleteDocument: (id) => {

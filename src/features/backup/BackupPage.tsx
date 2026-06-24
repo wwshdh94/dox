@@ -240,7 +240,6 @@ export function BackupPage() {
   };
 
   const showBackupProgress = backupMode !== null && backupPhase !== 'idle';
-  const showRestoreProgress = restoring || restorePhase === 'error';
 
   return (
     <div className="min-h-full pb-8">

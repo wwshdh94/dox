@@ -162,6 +162,7 @@ a {
   border-radius: var(--radius-xl);
 }
 
+.plan-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
