@@ -1,6 +1,11 @@
 import type { FamilyMember, User } from '@/types';
 import { getOtherFamilyMembers } from '@/lib/family';
 
+function hasLaunchCohortProAccess(user: User): boolean {
+  if (user.lifetimePro) return true;
+  return user.launchCohort === true && import.meta.env.VITE_LAUNCH_COHORT_PRO === 'true';
+}
+
 /** Non-owner family members allowed on free plan (owner + 2 others). */
 export const FREE_EXTRA_MEMBER_LIMIT = 2;
 
@@ -24,25 +29,74 @@ export interface PlanFeatureRow {
   feature: string;
   free: string;
   pro: string;
+  /** Pro-only or meaningfully better on Pro — highlight in comparison UI */
+  proHighlight?: boolean;
 }
 
+export const PRO_BENEFIT_HIGHLIGHTS = [
+  {
+    id: 'vault',
+    title: 'Unlimited vault',
+    description: 'No caps on documents, family members, assets, or bundles.',
+    icon: '📁',
+  },
+  {
+    id: 'backup',
+    title: 'Encrypted backup',
+    description: 'Download or auto-backup to Google Drive — never lose your vault.',
+    icon: '☁️',
+  },
+  {
+    id: 'ai',
+    title: 'Cloud AI extraction',
+    description: 'Higher accuracy on Aadhaar, PAN, RC, and other Indian layouts.',
+    icon: '✨',
+  },
+  {
+    id: 'share',
+    title: 'Longer secure shares',
+    description: '24-hour temp links and 7-day bundle shares for family handoffs.',
+    icon: '🔗',
+  },
+] as const;
+
+export const STANDARD_PLAN_BULLETS = [
+  '10 documents (+ referral bonus)',
+  'You + 2 family members',
+  '3 assets · 1 bundle',
+  'On-device OCR',
+  'Push expiry reminders',
+] as const;
+
+export const PRO_PLAN_BULLETS = [
+  'Unlimited documents & members',
+  'Cloud AI + on-device OCR',
+  'Google Drive backup & restore',
+  'Visiting card with QR',
+  '24 hr shares · 1 yr activity log',
+] as const;
+
 export const PLAN_FEATURES: PlanFeatureRow[] = [
-  { feature: 'Documents', free: '10 (+ referral bonus)', pro: 'Unlimited' },
-  { feature: 'Family members', free: 'You + 2 others', pro: 'Unlimited' },
-  { feature: 'Assets (vehicle, property, purchases)', free: 'Up to 3', pro: 'Unlimited' },
-  { feature: 'Shared bundles', free: '1 bundle', pro: 'Unlimited' },
-  { feature: 'Temp share links', free: '2 active · 1 hr', pro: 'Unlimited · 24 hr' },
-  { feature: 'Bundle share links', free: '1 hr', pro: 'Up to 7 days' },
-  { feature: 'AI extraction', free: 'On-device OCR', pro: 'On-device + cloud AI' },
-  { feature: 'Reminders', free: 'Push only', pro: 'Push + email' },
-  { feature: 'Visiting card', free: '—', pro: 'Publish + QR + vCard' },
-  { feature: 'Backup & restore', free: '—', pro: 'Encrypted file + Google Drive' },
-  { feature: 'Activity log', free: '30 days', pro: '1 year' },
+  { feature: 'Documents', free: '10 (+ referral bonus)', pro: 'Unlimited', proHighlight: true },
+  { feature: 'Family members', free: 'You + 2 others', pro: 'Unlimited', proHighlight: true },
+  { feature: 'Assets (vehicle, property, purchases)', free: 'Up to 3', pro: 'Unlimited', proHighlight: true },
+  { feature: 'Shared bundles', free: '1 bundle', pro: 'Unlimited', proHighlight: true },
+  { feature: 'Temp share links', free: '2 active · 1 hr', pro: 'Unlimited · 24 hr', proHighlight: true },
+  { feature: 'Bundle share links', free: '1 hr', pro: 'Up to 7 days', proHighlight: true },
+  { feature: 'AI extraction', free: 'On-device OCR', pro: 'On-device + cloud AI', proHighlight: true },
+  { feature: 'Reminders', free: 'Push', pro: 'Push' },
+  { feature: 'Visiting card', free: '—', pro: 'Publish + QR + vCard', proHighlight: true },
+  { feature: 'Backup & restore', free: '—', pro: 'Encrypted file + Google Drive', proHighlight: true },
+  { feature: 'Activity log', free: '30 days', pro: '1 year', proHighlight: true },
   { feature: 'Biometric lock & encryption', free: '✓', pro: '✓' },
 ];
 
 export function isProUser(user: User | null): boolean {
-  return user?.plan === 'pro' || user?.plan === 'family';
+  if (!user) return false;
+  if (user.lifetimePro === true) return true;
+  if (user.plan === 'pro' || user.plan === 'family') return true;
+  if (hasLaunchCohortProAccess(user)) return true;
+  return false;
 }
 
 export function canAddMember(user: User | null, members: FamilyMember[]): boolean {
@@ -104,8 +158,9 @@ export function canUseGoogleDriveBackup(user: User | null): boolean {
   return canUseVaultBackup(user);
 }
 
-export function canUseEmailReminders(user: User | null): boolean {
-  return isProUser(user);
+/** Reserved for Phase 3 email reminders — not exposed in UI yet. */
+export function canUseEmailReminders(_user: User | null): boolean {
+  return false;
 }
 
 export function activityLogRetentionDays(user: User | null): number {

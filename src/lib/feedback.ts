@@ -1,5 +1,7 @@
 /** User feedback — stored platform-wide in demo localStorage; prod uses server + RLS. */
 
+import { sanitizeFeedbackMessage } from '@/lib/inputLimits';
+
 export type FeedbackCategory = 'bug' | 'feature' | 'billing' | 'account' | 'other';
 export type FeedbackStatus = 'open' | 'in_progress' | 'fixed' | 'closed';
 
@@ -17,6 +19,9 @@ export interface FeedbackItem {
   adminReply?: string;
   adminRepliedAt?: string;
   replyRead: boolean;
+  /** Admin marked as good-quality feedback — counts toward Lifetime Pro task */
+  adminQualityApproved?: boolean;
+  adminQualityApprovedAt?: string;
 }
 
 const FEEDBACK_KEY = 'prevault-user-feedback';
@@ -50,7 +55,7 @@ export function submitFeedback(input: {
     userEmail: input.userEmail.trim().toLowerCase(),
     userName: input.userName.trim(),
     category: input.category,
-    message: input.message.trim(),
+    message: sanitizeFeedbackMessage(input.message),
     status: 'open',
     createdAt: now,
     updatedAt: now,
@@ -84,6 +89,22 @@ export function markFeedbackReplyRead(feedbackId: string): void {
   writeAll(readAll().map((f) => (f.id === feedbackId ? { ...f, replyRead: true } : f)));
 }
 
+/** Minimum message length for admin quality approval (Lifetime Pro task). */
+export const MIN_QUALITY_FEEDBACK_CHARS = 50;
+
+export function isQualityFeedbackMessage(message: string): boolean {
+  return message.trim().length >= MIN_QUALITY_FEEDBACK_CHARS;
+}
+
+export function countAdminApprovedQualityFeedback(userId: string): number {
+  return readAll().filter(
+    (f) =>
+      f.userId === userId &&
+      f.adminQualityApproved === true &&
+      isQualityFeedbackMessage(f.message),
+  ).length;
+}
+
 export function clearFeedback(): void {
   localStorage.removeItem(FEEDBACK_KEY);
 }
@@ -98,7 +119,12 @@ export function __adminListAllFeedback(): FeedbackItem[] {
 /** @internal Admin modules only */
 export function __adminUpdateFeedback(
   id: string,
-  patch: Partial<Pick<FeedbackItem, 'status' | 'adminReply' | 'adminRepliedAt' | 'replyRead'>>,
+  patch: Partial<
+    Pick<
+      FeedbackItem,
+      'status' | 'adminReply' | 'adminRepliedAt' | 'replyRead' | 'adminQualityApproved' | 'adminQualityApprovedAt'
+    >
+  >,
 ): FeedbackItem | null {
   let updated: FeedbackItem | null = null;
   const now = new Date().toISOString();
@@ -112,6 +138,12 @@ export function __adminUpdateFeedback(
         replyRead: patch.adminReply !== undefined ? false : (patch.replyRead ?? f.replyRead),
         adminRepliedAt:
           patch.adminReply !== undefined ? now : (patch.adminRepliedAt ?? f.adminRepliedAt),
+        adminQualityApprovedAt:
+          patch.adminQualityApproved === true
+            ? now
+            : patch.adminQualityApproved === false
+              ? undefined
+              : (patch.adminQualityApprovedAt ?? f.adminQualityApprovedAt),
       };
       return updated;
     }),

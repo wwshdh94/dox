@@ -5,6 +5,20 @@ import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { useVaultStore } from '@/store/useVaultStore';
+import { ActivityFilterBar } from '@/features/profile/ActivityFilterBar';
+import {
+  DEFAULT_ACTIVITY_FILTERS,
+  documentOptionsForActivityFilter,
+  filterActivitiesByCriteria,
+  filterShareLinksByCriteria,
+  hasActiveActivityFilters,
+  memberOptionsForActivityFilter,
+  sortActivities,
+  sortShareLinks,
+  type ActivityListFilters,
+  type ActivitySortKey,
+  type ShareLinkSortKey,
+} from '@/lib/activityFilters';
 import { activityLogRetentionDays } from '@/lib/planLimits';
 import {
   activityLabel,
@@ -38,6 +52,9 @@ export function ActivityLogPage() {
   const revokeBundleShareLink = useVaultStore((s) => s.revokeBundleShareLink);
   const navigate = useNavigate();
   const [filter, setFilter] = useState<ActivityFilter>('active');
+  const [listFilters, setListFilters] = useState<ActivityListFilters>(DEFAULT_ACTIVITY_FILTERS);
+  const [activitySort, setActivitySort] = useState<ActivitySortKey>('newest');
+  const [shareSort, setShareSort] = useState<ShareLinkSortKey>('expiring');
 
   useEffect(() => {
     purgeExpiredShareLinks();
@@ -51,7 +68,16 @@ export function ActivityLogPage() {
     [tempLinks, bundleShareLinks, documents, bundles, user?.name],
   );
 
-  const activeLinks = useMemo(() => allLinks.filter(isShareLinkLive), [allLinks]);
+  const filterCtx = useMemo(() => ({ documents, bundles }), [documents, bundles]);
+
+  const activeLinks = useMemo(
+    () =>
+      sortShareLinks(
+        filterShareLinksByCriteria(allLinks.filter(isShareLinkLive), listFilters, filterCtx),
+        shareSort,
+      ),
+    [allLinks, listFilters, filterCtx, shareSort],
+  );
 
   const visibleActivities = useMemo(
     () => filterActivitiesByRetention(activities, retentionDays),
@@ -63,7 +89,26 @@ export function ActivityLogPage() {
     [visibleActivities],
   );
 
-  const listedActivities = filter === 'shares' ? shareActivities : visibleActivities;
+  const baseActivities = filter === 'shares' ? shareActivities : visibleActivities;
+
+  const listedActivities = useMemo(
+    () =>
+      sortActivities(filterActivitiesByCriteria(baseActivities, listFilters, filterCtx), activitySort, {
+        documents,
+        bundles,
+        members,
+      }),
+    [baseActivities, listFilters, filterCtx, activitySort, documents, bundles, members],
+  );
+
+  const memberOptions = useMemo(() => memberOptionsForActivityFilter(members), [members]);
+
+  const documentOptions = useMemo(
+    () => documentOptionsForActivityFilter(visibleActivities, allLinks, documents),
+    [visibleActivities, allLinks, documents],
+  );
+
+  const filtersActive = hasActiveActivityFilters(listFilters);
 
   const copyLink = (pathPrefix: '/v/' | '/p/', token: string) => {
     const url = `${window.location.origin}${pathPrefix}${token}`;
@@ -96,10 +141,27 @@ export function ActivityLogPage() {
           ))}
         </div>
 
+        <ActivityFilterBar
+          filters={listFilters}
+          onChange={setListFilters}
+          memberOptions={memberOptions}
+          documentOptions={documentOptions}
+          sortMode={filter === 'active' ? 'share' : 'activity'}
+          sortKey={filter === 'active' ? shareSort : activitySort}
+          onSortChange={(sort) => {
+            if (filter === 'active') setShareSort(sort as ShareLinkSortKey);
+            else setActivitySort(sort as ActivitySortKey);
+          }}
+        />
+
         {filter === 'active' && (
           <section className="space-y-3">
             {activeLinks.length === 0 && (
-              <p className="text-sm text-muted">No active share URLs. Create one from a document or bundle.</p>
+              <p className="text-sm text-muted">
+                {filtersActive
+                  ? 'No active share URLs match these filters.'
+                  : 'No active share URLs. Create one from a document or bundle.'}
+              </p>
             )}
             {activeLinks.map((link) => (
               <Card key={link.id}>
@@ -160,7 +222,9 @@ export function ActivityLogPage() {
         {filter !== 'active' && (
           <section className="space-y-2">
             {listedActivities.length === 0 && (
-              <p className="text-sm text-muted">No activity in this view yet.</p>
+              <p className="text-sm text-muted">
+                {filtersActive ? 'No activity matches these filters.' : 'No activity in this view yet.'}
+              </p>
             )}
             <ul className="space-y-2">
               {listedActivities.map((a) => {

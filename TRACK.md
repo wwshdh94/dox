@@ -1,12 +1,12 @@
 # PreVault — Development Track
 
-**Last updated:** 2026-06-22
+**Last updated:** 2026-06-24 (Activity & shares filters)
 
 ## Current status
 
-**Phase:** MVP built — ready for user testing
+**Phase:** Supabase auth + P1–P4 + **P5 account lifecycle** on Dev
 
-Full PWA implemented in `src/` with demo auth (local-first). Build and tests pass.
+Full PWA with Supabase Google OAuth + server-synced family doc metadata/files encrypted per Google account (`created_by`). Build and tests pass (239 tests).
 
 ## Completed
 
@@ -21,7 +21,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] Assets: vehicle bundle, purchase/warranty cards, store tap-to-call
 - [x] Upload flow: on-device OCR mock, verify, duplicate warning, store-only
 - [x] Document detail: delete, notes, mark renewed, activity log, temp share link
-- [x] Security Center, PIN lock, recovery code on onboarding
+- [x] Security Center, PIN lock
 - [x] Visiting card editor + public page + vCard download
 - [x] Temp share public page `/v/:token`
 - [x] Vitest: 6 tests passing (incl. MemberDetailPage render regression)
@@ -46,7 +46,7 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **UI uniformity** — consistent `page-main` / `surface-panel` / `backFallback` / `pb-28`+BottomNav patterns across pages; redundant footer back links removed
 - [x] **Document field schemas** — fixed extracted fields per `DocType` in `src/lib/docFields.ts`; OCR/upload strip extras; notes for additional data; passport/PUC/insurance expiry fields; invoice warranty flow
 - [x] **Share UX overhaul** — document share modals (WhatsApp/email/temp URL), transparent overlay, dimmed backdrop
-- [x] **Profile Activity & shares** — `/profile/activity`: Active URLs filter, share activity + full log, creator attribution, auto-purge expired links, plan retention (30d/1y)
+- [x] **Profile Activity & shares** — `/profile/activity`: Active URLs filter, share activity + full log, creator attribution, auto-purge expired links, plan retention (30d/1y); **member / time / document filters** on all tabs
 - [x] **Upload/camera defer UI** — FAB upload & scan open native picker/camera immediately; form shown only after file selected; cancel returns to previous tab
 - [x] **Family home layout** — inline search placeholder, dismissible expiring banner, document pills with per-field Reveal/Hide (replaces Quick copy)
 - [x] **Member doc stats** — home cards show total documents + due-soon count; health record pill removed from member vault panel
@@ -69,24 +69,37 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 - [x] **Admin moderation** — block/unblock users (`/blocked` screen); grant Pro discounts shown on Plan page; admin routes lazy-loaded; no admin links in customer UI
 - [x] **Admin Ops & Finance dashboard** — `/admin/analytics` with MRR/ARR estimates, conversion, support load, activity KPIs; tab nav from Platform dashboard
 - [x] **On-device OCR (Aadhaar + PAN)** — Tesseract WASM (`tesseract.js`); card preprocess (grayscale/contrast); Verhoeff Aadhaar + PAN checksum/fixups; field parsers in `src/lib/idDocParser.ts`; upload + store pipeline pass `fileDataUrl`
+- [x] **Cloud OCR (server)** — `POST /api/ocr/extract` (Vite dev + `VITE_OCR_API_URL` prod); OpenAI vision or Google Document AI text; 2 min timeout; upload **Cloud AI** mode; falls back to on-device
+- [x] **Family manage — structure cards** — `/profile/family` household tree with generation colors; per-member invite on member page
+- [x] **P3 encrypted Storage** — family doc files in `household-documents` bucket; AES-256-GCM keyed to **Google/Supabase user id** (`created_by`); recovery code flow removed for now
+- [x] **Owner account lifecycle** — `/profile/account`: sign out, delete vault, delete account with ownership transfer; migration `007_p5_account_lifecycle.sql`
+- [x] **Upload image pipeline** — single-image crop/enhance (`ImageEditor`); JPEG compress (~2400px, ≤1.2MB); automatic on-device vs cloud OCR (`ocrRoute.ts`); no user AI toggle on upload
+- [x] **ImageEditor overlay fix** — crop dimming no longer covers full preview when cached images skip `onLoad`; layout measured via ResizeObserver + rAF
+- [x] **Multi-page upload** — camera/gallery: edit each page, "Use & add another page", queue batch edits, upload all pages together for OCR
+- [x] **On-device OCR v2** — Aadhaar Secure QR scan+decode (`aadhaarQr.ts`, jsQR, client-side gzip); PaddleOCR.js PP-OCRv5 primary + Tesseract `eng+hin` fallback; adaptive threshold preprocess (`ocrPreprocess.ts`); PAN entity-type validation; passport MRZ + DL field parsers; cloud AI unchanged (waiting)
+- [x] **Doc-type ROI OCR** — user-selected type drives location-specific field crops (`ocrRegions.ts`); per-region Paddle/Tesseract; Aadhaar front/back page layouts; upload requires doc type for images; user-picked type wins over OCR inference
+- [x] **Email reminders hidden** — removed from Profile/Settings/Plan UI; `emailReminders` forced off in store; Phase 3 email still in `PLAN.md`
+- [x] **Input & upload limits** — `src/lib/inputLimits.ts`: file size (image 12MB, PDF 10MB), max 10 pages/doc, notes 2000 chars, title 120, feedback 4000; enforced in upload UI + vault store
+- [x] **Production feature plan** — must / good / nice tiers in `PLAN.md` + `docs/PRODUCTION_MVP_GAP_ANALYSIS.md` (2026-06-23)
+- [x] **Terms + Privacy pages** — `/terms`, `/privacy` (DPDP draft); public routes; linked from login consent, profile Help, referrals
+- [x] **Manual document entry** — Settings → Document processing: Manual entry skips OCR; upload opens field form (`pending_details` status, not under review)
+- [x] **Scheduled Google Drive backup** — Profile → Backup: daily/weekly auto upload to same Google account; account-key encryption; runs while app open
+- [x] **Backup page UX** — status hero, Drive/file/restore cards, step progress panel, restore summary report, brand icons; account-key encryption (no passphrase)
+- [x] **Profile page redesign** — hero with avatar/stats, 2×2 quick actions, preferences card, icon menu sections (Vault/Rewards/Account)
 
 ## In progress
 
-- **OCR accuracy loop** — expand fixture tests, tune preprocess/PSM, add driving license + voter ID parsers
-- **Admin panel** on `feature/admin` — smoke-test both dashboards; prod env for admin keys
+- **UAT deploy + Security Chief RLS review** — two-account smoke on hosted Dev/UAT
 
-## Next steps (user testing)
+## Next steps (production — by 2026-06-30)
 
-1. Run `npm install && npm run dev` — walk through login → onboarding → Family/Assets
-2. Test upload, temp share, visiting card, dark mode
-3. Configure Supabase in `.env` for real Google OAuth + cloud sync
-4. Legal review before production (Aadhaar/PAN)
-5. Phase 2c: real cloud AI edge function (opt-in)
-6. Share Target SW handler for Android installed PWA
+1. **You:** Run `006_p4_launch_cohort_and_limits.sql` and `007_p5_account_lifecycle.sql` in Supabase SQL editor (after 001–005)
+2. Two-account smoke: A uploads family doc → preview works after refresh on A and B (after share grant + join with `member` param on invite link)
+3. Security Chief RLS review before UAT; Environment deploy Jun 29–30
 
 ## Blockers
 
-- Supabase project not configured (demo mode only)
+- Supabase Dev project + Google OAuth credentials (human setup — see `docs/SUPABASE_SETUP.md`)
 - Legal review for Aadhaar marketing
 - Real WebAuthn PRF / E2E encryption deferred to Pro tier
 
@@ -97,12 +110,19 @@ Full PWA implemented in `src/` with demo auth (local-first). Build and tests pas
 | Data (demo) | Zustand + localStorage persist |
 | Auth (demo) | Simulated Google; Supabase ready via env |
 | Extraction | On-device Tesseract OCR (Aadhaar/PAN); cloud behind Pro toggle |
-| Agents | Manager → Developer → Tester loop |
+| Agents | Manager → Developer → Tester loop; **production trio:** Environment, Architect, Security Chief (see `docs/AGENTIC_LOOP.md`) |
+| **Supabase topology (2026-06-23)** | 3 isolated projects: dev / uat / prod |
+| **Data residency (2026-06-23)** | Prod strict India — Mumbai (ap-south-1) |
+| **Month-end sync (2026-06-23)** | Family documents + ACL on server; Assets/Health local; admin re-store only (no vault browse) |
+| **Launch monetization (2026-06-23)** | ≤100 cohort; all Pro features; 50 docs/member; tasks → lifetime Pro; no Razorpay at launch |
+| **Lifetime Pro tasks** | 6/8 tasks — 11 docs, 4 family, 2 admin-approved feedbacks; **first 100 users only** — `docs/LAUNCH_COHORT.md` |
+| **Haptic feedback** | Android PWA via Vibration API; toggle in Appearance; iOS unsupported |
+| **Welcome flow** | `/welcome` — 5-slide tour + cloud hero; guest explore before Google sign-in — `docs/WELCOME_FLOW.md` |
 
 ## Test results
 
 ```
-npm test  — 105/105 pass
+npm test  — 235/235 pass
 npm run build — success (PWA SW generated)
 ```
 

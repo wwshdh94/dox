@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import {
   DEFAULT_IMAGE_EDIT_SETTINGS,
@@ -6,6 +6,7 @@ import {
   cssFilterForSettings,
   exportEditedImageFile,
   loadImageFromFile,
+  releaseLoadedImage,
   type CornerKey,
   type ImageEditSettings,
   type Point,
@@ -40,10 +41,14 @@ export function ImageEditor({
   file,
   onDone,
   onRetake,
+  onAddAnother,
+  pageLabel,
 }: {
   file: File;
   onDone: (edited: File) => void;
   onRetake: () => void;
+  onAddAnother?: (edited: File) => void;
+  pageLabel?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -53,18 +58,28 @@ export function ImageEditor({
   const [dragging, setDragging] = useState<CornerKey | null>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
+  const maskId = useId().replace(/:/g, '');
 
   useEffect(() => {
     let cancelled = false;
+    let loaded: HTMLImageElement | null = null;
+    setImage(null);
+    setError('');
     void loadImageFromFile(file)
       .then((img) => {
-        if (!cancelled) setImage(img);
+        if (cancelled) {
+          releaseLoadedImage(img);
+          return;
+        }
+        loaded = img;
+        setImage(img);
       })
       .catch(() => {
         if (!cancelled) setError('Could not load photo.');
       });
     return () => {
       cancelled = true;
+      if (loaded) releaseLoadedImage(loaded);
     };
   }, [file]);
 
@@ -87,10 +102,33 @@ export function ImageEditor({
   }, []);
 
   useEffect(() => {
-    updateDisplayRect();
-    window.addEventListener('resize', updateDisplayRect);
-    return () => window.removeEventListener('resize', updateDisplayRect);
+    if (!image) return;
+    let cancelled = false;
+    const measure = () => {
+      if (!cancelled) updateDisplayRect();
+    };
+    measure();
+    const raf = requestAnimationFrame(() => {
+      measure();
+      requestAnimationFrame(measure);
+    });
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measure);
+    };
   }, [image, updateDisplayRect]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !image) return;
+    const ro = new ResizeObserver(() => updateDisplayRect());
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [image, updateDisplayRect]);
+
+  const overlayReady = displayRect.width > 8 && displayRect.height > 8;
 
   const displayCorners = useMemo(
     () => cornersToDisplay(settings.corners, displayRect),
@@ -131,13 +169,14 @@ export function ImageEditor({
 
   const reset = () => setSettings(DEFAULT_IMAGE_EDIT_SETTINGS);
 
-  const apply = async () => {
+  const apply = async (mode: 'done' | 'addAnother') => {
     if (!image) return;
     setExporting(true);
     setError('');
     try {
       const edited = await exportEditedImageFile(image, settings, file.name);
-      onDone(edited);
+      if (mode === 'addAnother' && onAddAnother) onAddAnother(edited);
+      else onDone(edited);
     } catch {
       setError('Could not save edited photo.');
     } finally {
@@ -149,6 +188,9 @@ export function ImageEditor({
 
   return (
     <div className="space-y-4">
+      {pageLabel && (
+        <p className="text-center text-xs font-medium text-accent-ink">{pageLabel}</p>
+      )}
       <p className="text-sm text-muted">
         Drag the corners to crop. Use the sliders or HDR to brighten the scan.
       </p>
@@ -167,35 +209,39 @@ export function ImageEditor({
               style={{ filter }}
               onLoad={updateDisplayRect}
             />
-            <svg className="pointer-events-none absolute inset-0 h-full w-full">
-              <defs>
-                <mask id="crop-mask">
-                  <rect width="100%" height="100%" fill="white" />
-                  <polygon points={polygonPoints} fill="black" />
-                </mask>
-              </defs>
-              <rect width="100%" height="100%" fill="rgba(0,0,0,0.45)" mask="url(#crop-mask)" />
-              <polygon
-                points={polygonPoints}
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
-            {CORNER_KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                aria-label={`Adjust ${key} corner`}
-                className="absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent bg-surface-elevated shadow-md touch-none"
-                style={{ left: displayCorners[key].x, top: displayCorners[key].y }}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  setDragging(key);
-                }}
-              />
-            ))}
+            {overlayReady && (
+              <>
+                <svg className="pointer-events-none absolute inset-0 h-full w-full">
+                  <defs>
+                    <mask id={maskId}>
+                      <rect width="100%" height="100%" fill="white" />
+                      <polygon points={polygonPoints} fill="black" />
+                    </mask>
+                  </defs>
+                  <rect width="100%" height="100%" fill="rgba(0,0,0,0.45)" mask={`url(#${maskId})`} />
+                  <polygon
+                    points={polygonPoints}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+                {CORNER_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-label={`Adjust ${key} corner`}
+                    className="absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent bg-surface-elevated shadow-md touch-none"
+                    style={{ left: displayCorners[key].x, top: displayCorners[key].y }}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      setDragging(key);
+                    }}
+                  />
+                ))}
+              </>
+            )}
           </>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted">Loading photo…</div>
@@ -255,9 +301,19 @@ export function ImageEditor({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <Button className="w-full" disabled={!image || exporting} onClick={() => void apply()}>
+      <Button className="w-full" disabled={!image || exporting} onClick={() => void apply('done')}>
         {exporting ? 'Applying…' : 'Use photo'}
       </Button>
+      {onAddAnother && (
+        <Button
+          variant="secondary"
+          className="w-full"
+          disabled={!image || exporting}
+          onClick={() => void apply('addAnother')}
+        >
+          {exporting ? 'Applying…' : 'Use & add another page'}
+        </Button>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <Button variant="secondary" className="w-full" onClick={reset}>
           Reset

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isDocumentIncomplete,
+  isDocumentPendingDetails,
   isDocumentReviewed,
   isDocumentUnderReview,
   normalizeReviewStatus,
@@ -21,15 +23,22 @@ describe('documentReview', () => {
     expect(normalizeReviewStatus({ ...base, verificationStatus: 'pending' })).toBe('under_review');
     expect(normalizeReviewStatus({ ...base, verificationStatus: 'verified' })).toBe('reviewed');
     expect(normalizeReviewStatus({ ...base, reviewStatus: 'processing' })).toBe('processing');
+    expect(normalizeReviewStatus({ ...base, reviewStatus: 'pending_details' })).toBe('pending_details');
   });
 
   it('detects review states', () => {
     expect(isDocumentUnderReview({ ...base, reviewStatus: 'under_review' })).toBe(true);
+    expect(isDocumentPendingDetails({ ...base, reviewStatus: 'pending_details' })).toBe(true);
+    expect(isDocumentIncomplete({ ...base, reviewStatus: 'pending_details' })).toBe(true);
+    expect(isDocumentUnderReview({ ...base, reviewStatus: 'pending_details' })).toBe(false);
     expect(isDocumentReviewed({ ...base, reviewStatus: 'reviewed' })).toBe(true);
     expect(isDocumentReviewed({ ...base, reviewStatus: 'rejected' })).toBe(false);
   });
 
-  it('sorts under-review documents first', () => {
+  it('sorts incomplete documents before reviewed', () => {
+    expect(reviewStatusSortRank({ ...base, reviewStatus: 'pending_details' })).toBeLessThan(
+      reviewStatusSortRank({ ...base, reviewStatus: 'reviewed' }),
+    );
     expect(reviewStatusSortRank({ ...base, reviewStatus: 'under_review' })).toBeLessThan(
       reviewStatusSortRank({ ...base, reviewStatus: 'reviewed' }),
     );

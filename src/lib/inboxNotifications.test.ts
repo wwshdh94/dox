@@ -49,6 +49,23 @@ describe('inboxNotifications vault alerts', () => {
     localStorage.clear();
   });
 
+  it('includes pending-details documents with manual-entry copy', () => {
+    const documents: Document[] = [
+      {
+        ...baseDoc,
+        id: 'd3',
+        title: 'PAN',
+        docType: 'pan',
+        memberId: 'm1',
+        reviewStatus: 'pending_details',
+      } as Document,
+    ];
+    const items = buildVaultAlertNotifications(ctx({ documents }));
+    const item = items.find((i) => i.sourceId === 'd3');
+    expect(item?.title).toContain('Add details');
+    expect(item?.href).toBe('/upload?edit=d3');
+  });
+
   it('includes under-review documents', () => {
     const documents: Document[] = [
       {

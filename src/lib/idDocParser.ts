@@ -1,5 +1,7 @@
 /** Parse Indian identity document fields from noisy OCR text. */
 
+import type { DocType } from '@/types';
+
 export interface PanParseResult {
   panNumber: string;
   fullName?: string;
@@ -15,6 +17,27 @@ export interface AadhaarParseResult {
   fathersName?: string;
   confidence: number;
 }
+
+export interface PassportParseResult {
+  passportNumber: string;
+  fullName?: string;
+  dateOfBirth?: string;
+  dateOfIssue?: string;
+  expiryDate?: string;
+  nationality?: string;
+  confidence: number;
+}
+
+export interface DrivingLicenseParseResult {
+  licenseNumber: string;
+  fullName?: string;
+  dateOfBirth?: string;
+  expiryDate?: string;
+  confidence: number;
+}
+
+/** 4th char: P=person, C=company, H=HUF, F=firm, A=AOP, T=trust, B=BOI, L=local authority, J=artificial juridical, G=government */
+const PAN_ENTITY_TYPES = new Set(['P', 'C', 'H', 'F', 'A', 'T', 'B', 'L', 'J', 'G']);
 
 const PAN_RE = /\b([A-Z]{5}[0-9]{4}[A-Z])\b/g;
 const AADHAAR_SPACED_RE = /\b(\d{4}[\s-]?\d{4}[\s-]?\d{4})\b/g;
@@ -40,6 +63,13 @@ export function normalizeOcrText(text: string): string {
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/** Validate PAN format and entity-type letter (4th character). */
+export function isValidPanNumber(value: string): boolean {
+  const pan = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) return false;
+  return PAN_ENTITY_TYPES.has(pan[3]);
 }
 
 /** Verhoeff checksum — validates Aadhaar numbers. */
@@ -113,8 +143,7 @@ function fixPanCandidate(raw: string): string | null {
   }
 
   const pan = chars.join('');
-  if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) return null;
-  return pan;
+  return isValidPanNumber(pan) ? pan : null;
 }
 
 function findPanCandidates(text: string): string[] {
@@ -296,6 +325,134 @@ export function parsePanFromText(rawText: string): PanParseResult | null {
   return result;
 }
 
+const DL_NUMBER_RE =
+  /\b((?:DL[\s\-/]?)?[A-Z]{2}[\s\-/]?\d{2}[\s\-/]?\d{4}[\s\-/]?\d{4,7})\b/gi;
+const DL_ALT_RE = /\bDL[\s\-]?(\d{2}[\s\-]?\d{11,15})\b/gi;
+
+function findDrivingLicenseCandidates(text: string): string[] {
+  const found = new Set<string>();
+  const upper = text.toUpperCase();
+
+  for (const match of upper.matchAll(DL_NUMBER_RE)) {
+    const normalized = match[1].replace(/[\s\-/]+/g, '').toUpperCase();
+    if (normalized.length >= 10 && normalized.length <= 20) found.add(normalized);
+  }
+  for (const match of upper.matchAll(DL_ALT_RE)) {
+    const normalized = `DL${match[1].replace(/\D/g, '')}`;
+    if (normalized.length >= 10) found.add(normalized);
+  }
+  return [...found];
+}
+
+function parseMrzDate(yymmdd: string): string | undefined {
+  if (!/^\d{6}$/.test(yymmdd)) return undefined;
+  const yy = Number(yymmdd.slice(0, 2));
+  const mm = yymmdd.slice(2, 4);
+  const dd = yymmdd.slice(4, 6);
+  const year = yy <= 30 ? 2000 + yy : 1900 + yy;
+  const iso = `${year}-${mm}-${dd}`;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return iso;
+}
+
+function cleanMrzName(raw: string): string {
+  return raw
+    .replace(/</g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/** Parse ICAO TD3 passport MRZ (2 lines) from OCR text. */
+export function parsePassportMrzFromText(rawText: string): PassportParseResult | null {
+  const lines = normalizeOcrText(rawText)
+    .toUpperCase()
+    .split('\n')
+    .map((l) => l.replace(/\s/g, ''))
+    .filter((l) => l.length >= 30);
+
+  for (let i = 0; i < lines.length - 1; i++) {
+    const l1 = lines[i];
+    const l2 = lines[i + 1];
+    if (!l1.startsWith('P<') || l2.length < 28) continue;
+
+    const nameMatch = l1.match(/^P<[A-Z]{3}([A-Z<]+)<<([A-Z<]+)/);
+    const l2Match = l2.match(/^([A-Z0-9<]{9})\d[A-Z<]{3}(\d{6})\d([MFX<])(\d{6})/);
+    if (!l2Match) continue;
+
+    const passportNumber = l2Match[1].replace(/</g, '').trim();
+    const nationality = l2.slice(10, 13).replace(/</g, '');
+    const dob = parseMrzDate(l2Match[2]);
+    const expiry = parseMrzDate(l2Match[4]);
+
+    let fullName: string | undefined;
+    if (nameMatch) {
+      const surname = cleanMrzName(nameMatch[1]);
+      const given = cleanMrzName(nameMatch[2]);
+      fullName = [given, surname].filter(Boolean).join(' ').trim() || undefined;
+    }
+
+    if (!passportNumber) continue;
+
+    const result: PassportParseResult = {
+      passportNumber,
+      fullName,
+      dateOfBirth: dob,
+      expiryDate: expiry,
+      nationality: nationality || undefined,
+      confidence: 0,
+    };
+    let score = 0.7;
+    if (fullName) score += 0.1;
+    if (dob) score += 0.08;
+    if (expiry) score += 0.08;
+    result.confidence = Math.min(score, 0.95);
+    return result;
+  }
+
+  return null;
+}
+
+export function parseDrivingLicenseFromText(rawText: string): DrivingLicenseParseResult | null {
+  const text = normalizeOcrText(rawText);
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const numbers = findDrivingLicenseCandidates(text);
+  if (numbers.length === 0) return null;
+
+  const licenseNumber = numbers[0];
+  const names = extractNameCandidates(lines);
+  const labeledName = extractLabelFollowedName(lines, /^name$/i);
+  const dateOfBirth = extractDob(text);
+
+  let expiryDate: string | undefined;
+  for (const line of lines) {
+    if (!/(VALID|EXPIR|VALIDITY|TILL|UPTO)/i.test(line)) continue;
+    const dateMatch = line.match(DATE_ONLY_RE);
+    if (dateMatch) {
+      expiryDate = parseDateToIso(dateMatch[1]);
+      if (expiryDate) break;
+    }
+  }
+
+  const result: DrivingLicenseParseResult = {
+    licenseNumber,
+    fullName: labeledName ?? names[0],
+    dateOfBirth,
+    expiryDate,
+    confidence: 0,
+  };
+  let score = 0.55;
+  if (licenseNumber) score += 0.25;
+  if (result.fullName) score += 0.1;
+  if (dateOfBirth) score += 0.05;
+  if (expiryDate) score += 0.05;
+  result.confidence = Math.min(score, 0.92);
+  return result;
+}
+
 export function parseAadhaarFromText(rawText: string): AadhaarParseResult | null {
   const text = normalizeOcrText(rawText);
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -323,3 +480,189 @@ export function parseAadhaarFromText(rawText: string): AadhaarParseResult | null
   result.confidence = scoreAadhaarConfidence(result);
   return result;
 }
+
+const VOTER_ID_RE = /\b([A-Z]{3}[0-9]{7})\b/gi;
+
+function findVoterIdCandidates(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.toUpperCase().matchAll(VOTER_ID_RE)) {
+    found.add(match[1].toUpperCase());
+  }
+  return [...found];
+}
+
+export interface VoterIdParseResult {
+  voterIdNumber: string;
+  fullName?: string;
+  dateOfBirth?: string;
+  confidence: number;
+}
+
+export function parseVoterIdFromText(rawText: string): VoterIdParseResult | null {
+  const text = normalizeOcrText(rawText);
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const ids = findVoterIdCandidates(text);
+  if (ids.length === 0) return null;
+
+  const names = extractNameCandidates(lines);
+  const labeledName = extractLabelFollowedName(lines, /^name$/i);
+  const dateOfBirth = extractDob(text);
+
+  const result: VoterIdParseResult = {
+    voterIdNumber: ids[0],
+    fullName: labeledName ?? names[0],
+    dateOfBirth,
+    confidence: 0,
+  };
+  let score = 0.55;
+  if (result.voterIdNumber) score += 0.25;
+  if (result.fullName) score += 0.1;
+  if (dateOfBirth) score += 0.05;
+  result.confidence = Math.min(score, 0.9);
+  return result;
+}
+
+export interface RegionParseInput {
+  rawText: string;
+  regions?: Record<string, string>;
+  pageIndex?: number;
+}
+
+function mergeText(...parts: Array<string | undefined>): string {
+  return parts.filter((p) => p?.trim()).join('\n');
+}
+
+/** Parse PAN using location-specific crops when available. */
+export function parsePanFromRegions(regions: Record<string, string>): PanParseResult | null {
+  const synthetic = mergeText(
+    regions.name,
+    regions.father_name ? `Father's Name\n${regions.father_name}` : undefined,
+    regions.dob ? `DOB: ${regions.dob}` : undefined,
+    regions.pan_number,
+  );
+  if (!synthetic.trim()) return null;
+  const parsed = parsePanFromText(synthetic);
+  if (!parsed) return null;
+  if (regions.father_name?.trim() && !parsed.fathersName) {
+    const fatherLine = regions.father_name.trim();
+    if (looksLikeNameLine(fatherLine)) {
+      parsed.fathersName = titleCaseName(fatherLine);
+      parsed.confidence = scorePanConfidence(parsed);
+    }
+  }
+  return parsed;
+}
+
+/** Parse Aadhaar using front/back region crops. */
+export function parseAadhaarFromRegions(
+  regions: Record<string, string>,
+  pageIndex = 0,
+): AadhaarParseResult | null {
+  const aadhaarFromRegion = regions.aadhaar_number
+    ? findAadhaarCandidates(regions.aadhaar_number)[0]
+    : undefined;
+
+  const synthetic =
+    pageIndex === 0
+      ? mergeText(
+          regions.name,
+          regions.dob ? `DOB: ${regions.dob}` : undefined,
+          regions.gender,
+        )
+      : mergeText(regions.address, regions.father_name);
+
+  const parsed = parseAadhaarFromText(
+    aadhaarFromRegion ? `${synthetic}\n${aadhaarFromRegion}` : synthetic,
+  );
+  if (!parsed && !aadhaarFromRegion) return null;
+
+  const result: AadhaarParseResult = parsed ?? {
+    aadhaarNumber: aadhaarFromRegion!,
+    confidence: 0,
+  };
+
+  if (aadhaarFromRegion) result.aadhaarNumber = aadhaarFromRegion;
+  if (pageIndex === 0 && regions.name?.trim() && looksLikeNameLine(regions.name.trim())) {
+    result.fullName = titleCaseName(regions.name.trim());
+  }
+  if (regions.dob?.trim()) {
+    const dob = parseDateToIso(regions.dob.trim()) ?? parseDobFromLabeled(regions.dob);
+    if (dob) result.dateOfBirth = dob;
+  }
+  if (regions.father_name?.trim()) {
+    const rel = extractRelationName([regions.father_name]);
+    if (rel) result.fathersName = rel;
+    else if (looksLikeNameLine(regions.father_name.trim())) {
+      result.fathersName = titleCaseName(regions.father_name.trim());
+    }
+  }
+
+  result.confidence = scoreAadhaarConfidence(result);
+  return result.aadhaarNumber || result.fullName ? result : null;
+}
+
+function parseDobFromLabeled(raw: string): string | undefined {
+  const m = raw.match(/(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/);
+  return m ? parseDateToIso(m[1]) : undefined;
+}
+
+export function parsePassportFromRegions(regions: Record<string, string>): PassportParseResult | null {
+  const mrzText = regions.mrz ?? '';
+  const fromMrz = parsePassportMrzFromText(mrzText || regions.passport_number || '');
+  if (fromMrz) return fromMrz;
+
+  const synthetic = mergeText(regions.name, regions.passport_number);
+  if (!synthetic.trim()) return null;
+  return parsePassportMrzFromText(synthetic);
+}
+
+export function parseDrivingLicenseFromRegions(
+  regions: Record<string, string>,
+): DrivingLicenseParseResult | null {
+  const synthetic = mergeText(
+    regions.name,
+    regions.license_number,
+    regions.dob ? `DOB: ${regions.dob}` : undefined,
+    regions.validity ? `Validity: ${regions.validity}` : undefined,
+  );
+  if (!synthetic.trim()) return null;
+  return parseDrivingLicenseFromText(synthetic);
+}
+
+export function parseVoterIdFromRegions(regions: Record<string, string>): VoterIdParseResult | null {
+  const synthetic = mergeText(
+    regions.name,
+    regions.voter_id,
+    regions.dob ? `DOB: ${regions.dob}` : undefined,
+  );
+  if (!synthetic.trim()) return null;
+  return parseVoterIdFromText(synthetic);
+}
+
+/** Doc-type field extraction — prefers ROI text, falls back to full-page OCR. */
+export function parseDocFieldsForType(
+  docType: DocType,
+  input: RegionParseInput,
+): PanParseResult | AadhaarParseResult | PassportParseResult | DrivingLicenseParseResult | VoterIdParseResult | null {
+  const { rawText, regions, pageIndex = 0 } = input;
+  const hasRegions = regions && Object.keys(regions).length > 0;
+
+  if (docType === 'pan') {
+    return (hasRegions ? parsePanFromRegions(regions!) : null) ?? parsePanFromText(rawText);
+  }
+  if (docType === 'aadhaar') {
+    return (hasRegions ? parseAadhaarFromRegions(regions!, pageIndex) : null) ?? parseAadhaarFromText(rawText);
+  }
+  if (docType === 'passport') {
+    return (hasRegions ? parsePassportFromRegions(regions!) : null) ?? parsePassportMrzFromText(rawText);
+  }
+  if (docType === 'driving_license') {
+    return (hasRegions ? parseDrivingLicenseFromRegions(regions!) : null) ??
+      parseDrivingLicenseFromText(rawText);
+  }
+  if (docType === 'voter_id') {
+    return (hasRegions ? parseVoterIdFromRegions(regions!) : null) ?? parseVoterIdFromText(rawText);
+  }
+  return null;
+}
+

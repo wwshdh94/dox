@@ -1,4 +1,11 @@
+import { validateUploadFile } from '@/lib/inputLimits';
+
 export function readFileDataUrl(file: File): Promise<string> {
+  const check = validateUploadFile(file);
+  if (!check.ok) {
+    return Promise.reject(new Error(check.message));
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);

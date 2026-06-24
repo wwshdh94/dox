@@ -2,7 +2,10 @@
 export const APP_NAME = 'PreVault';
 export const APP_NAME_LOWER = 'prevault';
 export const APP_SUPPORT_EMAIL = 'support@prevault.app';
+export const APP_PRIVACY_EMAIL = 'privacy@prevault.app';
+export const APP_GRIEVANCE_OFFICER = 'PreVault Grievance Officer';
 export const APP_PUBLIC_ORIGIN = 'https://prevault.app';
+export const LEGAL_EFFECTIVE_DATE = '24 June 2026';
 
 const SIMPLE_KEY_MIGRATIONS: [string, string][] = [
   ['dox-vault', 'prevault-vault'],

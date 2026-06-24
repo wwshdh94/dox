@@ -74,7 +74,7 @@ export function checkCanAddDocument(
     return { allowed: false, reason: 'member_cap', memberId, memberCount };
   }
 
-  if (target.reviewStatus === 'processing' || target.reviewStatus === 'under_review' || target.verificationStatus === 'pending') {
+  if (target.reviewStatus === 'processing' || target.reviewStatus === 'under_review' || target.reviewStatus === 'pending_details' || target.verificationStatus === 'pending') {
     if (!canStageDocument(user, documents)) {
       return { allowed: false, reason: 'pending_queue' };
     }

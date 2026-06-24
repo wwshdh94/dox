@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { AuthProvider } from '@/features/auth/AuthProvider';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { debug, installGlobalErrorHandlers } from './lib/debug';
 import { migrateLegacyStorageKeys } from './lib/appMeta';
@@ -25,7 +26,9 @@ if (!rootEl) {
 createRoot(rootEl).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

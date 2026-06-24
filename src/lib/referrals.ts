@@ -51,7 +51,9 @@ export function getLedgerEntry(code: string): ReferralLedgerEntry {
 }
 
 export function getBonusDocsForCode(code: string): number {
-  return Math.min(getLedgerEntry(code).bonusDocsEarned, REFERRAL_MAX_BONUS_DOCS);
+  const earned = getLedgerEntry(code).bonusDocsEarned;
+  const safe = typeof earned === 'number' && Number.isFinite(earned) ? earned : 0;
+  return Math.min(safe, REFERRAL_MAX_BONUS_DOCS);
 }
 
 /** Effective document limit for free-tier users; null means unlimited. */

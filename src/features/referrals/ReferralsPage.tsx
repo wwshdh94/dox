@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
@@ -92,8 +93,11 @@ export function ReferralsPage() {
 
         <p className="text-[0.65rem] leading-relaxed text-muted">
           Referral rewards apply when an invited user signs up and completes qualifying uploads.
-          Bonus capacity is subject to fair-use limits per account. Terms may change. See Terms of
-          Service for details.
+          Bonus capacity is subject to fair-use limits per account. Terms may change. See{' '}
+          <Link to="/terms" className="text-accent-ink">
+            Terms of Service
+          </Link>{' '}
+          for details.
         </p>
       </main>
       <BottomNav />

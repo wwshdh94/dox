@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isImageFile, isPdfFile } from '@/lib/files';
 
@@ -123,13 +123,77 @@ function FullscreenViewer({
 export function DocumentFilePreview({
   fileName,
   fileDataUrl,
+  additionalFileDataUrls,
+  loading,
+  error,
 }: {
   fileName?: string;
   fileDataUrl?: string;
+  additionalFileDataUrls?: string[];
+  loading?: boolean;
+  error?: string | null;
 }) {
+  const pages = [fileDataUrl, ...(additionalFileDataUrls ?? [])].filter((u): u is string =>
+    Boolean(u),
+  );
+  const [activePage, setActivePage] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
-  if (!fileDataUrl) {
+  useEffect(() => {
+    setActivePage(0);
+  }, [fileDataUrl, additionalFileDataUrls?.length]);
+
+  const multiPage = pages.length > 1;
+
+  const handleSwipeEnd = (clientX: number, clientY: number) => {
+    if (!multiPage || !swipeStart.current) return;
+    const dx = clientX - swipeStart.current.x;
+    const dy = clientY - swipeStart.current.y;
+    swipeStart.current = null;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0 && activePage < pages.length - 1) setActivePage((p) => p + 1);
+    if (dx > 0 && activePage > 0) setActivePage((p) => p - 1);
+  };
+
+  const swipeHandlers = multiPage
+    ? {
+        onTouchStart: (e: React.TouchEvent) => {
+          const t = e.changedTouches[0];
+          if (t) swipeStart.current = { x: t.clientX, y: t.clientY };
+        },
+        onTouchEnd: (e: React.TouchEvent) => {
+          const t = e.changedTouches[0];
+          if (t) handleSwipeEnd(t.clientX, t.clientY);
+        },
+        onPointerDown: (e: React.PointerEvent) => {
+          if (e.pointerType === 'touch') return;
+          swipeStart.current = { x: e.clientX, y: e.clientY };
+        },
+        onPointerUp: (e: React.PointerEvent) => {
+          if (e.pointerType === 'touch') return;
+          handleSwipeEnd(e.clientX, e.clientY);
+        },
+      }
+    : {};
+
+  if (loading) {
+    return (
+      <div className="flex h-[25vh] items-center justify-center rounded-2xl border border-dashed border-border bg-accent-soft/30 p-6 text-center text-sm text-muted">
+        Loading encrypted file…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-[25vh] items-center justify-center rounded-2xl border border-dashed border-danger/30 bg-danger/5 p-6 text-center text-sm text-danger">
+        {error}
+      </div>
+    );
+  }
+
+  if (pages.length === 0) {
     return (
       <div className="flex h-[25vh] items-center justify-center rounded-2xl border border-dashed border-border bg-accent-soft/30 p-6 text-center text-sm text-muted">
         <div>
@@ -140,9 +204,11 @@ export function DocumentFilePreview({
     );
   }
 
-  const pdf = isPdfFile(fileName, fileDataUrl);
-  const image = isImageFile(fileName, fileDataUrl);
+  const currentUrl = pages[activePage] ?? pages[0]!;
+  const pdf = isPdfFile(fileName, currentUrl);
+  const image = isImageFile(fileName, currentUrl);
   const canExpand = image || pdf;
+  const pageLabel = pages.length > 1 ? `Page ${activePage + 1} of ${pages.length}` : null;
 
   return (
     <>
@@ -150,7 +216,10 @@ export function DocumentFilePreview({
         <div className="flex items-center justify-between gap-2">
           <p className="section-label">Original document</p>
           <div className="flex min-w-0 items-center gap-2">
-            {fileName && <p className="truncate text-xs text-muted">{fileName}</p>}
+            {pageLabel && <p className="truncate text-xs text-muted">{pageLabel}</p>}
+            {fileName && pages.length === 1 && (
+              <p className="truncate text-xs text-muted">{fileName}</p>
+            )}
             {canExpand && (
               <button
                 type="button"
@@ -163,6 +232,28 @@ export function DocumentFilePreview({
           </div>
         </div>
 
+        {pages.length > 1 && (
+          <div className="space-y-1">
+            <p className="text-center text-[0.65rem] text-muted">Swipe left or right on the preview</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+            {pages.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setActivePage(idx)}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                  idx === activePage
+                    ? 'bg-accent text-accent-fg'
+                    : 'bg-surface-elevated text-muted'
+                }`}
+              >
+                Page {idx + 1}
+              </button>
+            ))}
+            </div>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => canExpand && setFullscreen(true)}
@@ -170,11 +261,16 @@ export function DocumentFilePreview({
           className={`block h-[25vh] w-full overflow-hidden rounded-2xl border border-border-soft bg-surface shadow-sm ${
             canExpand ? 'cursor-zoom-in' : 'cursor-default'
           }`}
-          aria-label={canExpand ? 'Open document in full screen' : undefined}
+          aria-label={
+            canExpand
+              ? `Open document in full screen${pageLabel ? `, ${pageLabel}` : ''}`
+              : undefined
+          }
+          {...swipeHandlers}
         >
           <DocumentPreviewContent
             fileName={fileName}
-            fileDataUrl={fileDataUrl}
+            fileDataUrl={currentUrl}
             pdf={pdf}
             image={image}
           />
@@ -183,8 +279,8 @@ export function DocumentFilePreview({
 
       {fullscreen && (
         <FullscreenViewer
-          fileName={fileName}
-          fileDataUrl={fileDataUrl}
+          fileName={pageLabel ?? fileName}
+          fileDataUrl={currentUrl}
           pdf={pdf}
           image={image}
           onClose={() => setFullscreen(false)}

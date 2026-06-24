@@ -11,6 +11,11 @@ import { canCreateBundle } from '@/lib/planLimits';
 import { UpgradeHint } from '@/components/UpgradeHint';
 import { DOMAIN_LABELS, resolveDocTags } from '@/lib/docTags';
 import { docOwnerInitials } from '@/lib/family';
+import {
+  MAX_BUNDLE_NAME_CHARS,
+  MAX_BUNDLE_PURPOSE_CHARS,
+  clampText,
+} from '@/lib/inputLimits';
 
 const PURPOSE_PRESETS = [
   'Insurance claim',
@@ -39,7 +44,7 @@ export function BundleCreatePage() {
 
   const canCreate = canCreateBundle(user, bundles.length);
 
-  const purpose = purposePreset === 'Custom' ? customPurpose.trim() : purposePreset;
+  const purpose = purposePreset === 'Custom' ? clampText(customPurpose, MAX_BUNDLE_PURPOSE_CHARS) : purposePreset;
   const showAllDocs = !memberId;
 
   const filteredDocs = useMemo(() => {
@@ -94,7 +99,13 @@ export function BundleCreatePage() {
           watermarks.
         </p>
 
-        <Input label="Bundle name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahul — Hospital admission" />
+        <Input
+          label="Bundle name"
+          value={name}
+          onChange={(e) => setName(e.target.value.slice(0, MAX_BUNDLE_NAME_CHARS))}
+          maxLength={MAX_BUNDLE_NAME_CHARS}
+          placeholder="e.g. Rahul — Hospital admission"
+        />
 
         <Select label="Purpose" value={purposePreset} onChange={(e) => setPurposePreset(e.target.value)}>
           {PURPOSE_PRESETS.map((p) => (
@@ -105,7 +116,12 @@ export function BundleCreatePage() {
         </Select>
 
         {purposePreset === 'Custom' && (
-          <Input label="Custom purpose" value={customPurpose} onChange={(e) => setCustomPurpose(e.target.value)} />
+          <Input
+            label="Custom purpose"
+            value={customPurpose}
+            onChange={(e) => setCustomPurpose(e.target.value.slice(0, MAX_BUNDLE_PURPOSE_CHARS))}
+            maxLength={MAX_BUNDLE_PURPOSE_CHARS}
+          />
         )}
 
         {members.length > 0 && (

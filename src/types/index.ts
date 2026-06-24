@@ -41,7 +41,7 @@ export type MemberStatus = 'active' | 'disabled' | 'pending';
 export type MemberRole = 'owner' | 'viewer';
 export type MemberGender = 'male' | 'female';
 
-export type DocumentReviewStatus = 'processing' | 'under_review' | 'reviewed' | 'rejected';
+export type DocumentReviewStatus = 'processing' | 'under_review' | 'pending_details' | 'reviewed' | 'rejected';
 
 export interface User {
   id: string;
@@ -57,6 +57,14 @@ export interface User {
   referralUploads: number;
   /** True once 5 uploads completed and referrer rewarded */
   referralQualified: boolean;
+  /** Earned via launch task program — permanent Pro when billing goes live */
+  lifetimePro?: boolean;
+  lifetimeProGrantedAt?: string;
+  /** First 100 signups — launch Pro + Lifetime Pro tasks */
+  launchCohort?: boolean;
+  launchCohortNumber?: number;
+  /** Temporary preview user — cleared on Google sign-in */
+  isGuestPreview?: boolean;
 }
 
 export interface HealthSummary {
@@ -137,8 +145,16 @@ export interface Document {
   archivedAt?: string;
   fileName?: string;
   fileDataUrl?: string;
-  /** Upload → processing → under_review → reviewed | rejected */
+  /** Extra scan pages (e.g. Aadhaar front + back). */
+  additionalFileDataUrls?: string[];
+  /** Encrypted blob path in Supabase Storage (family docs synced to server). */
+  storagePath?: string;
+  /** Supabase auth user id that encrypted this document (Google login). */
+  createdBy?: string;
+  /** Upload → processing → under_review | pending_details → reviewed | rejected */
   reviewStatus?: DocumentReviewStatus;
+  /** OCR could not classify — user must pick document type before review. */
+  needsDocTypeSelection?: boolean;
   /** @deprecated Use reviewStatus */
   verificationStatus?: 'pending' | 'verified';
   createdAt: string;
@@ -172,6 +188,7 @@ export type ActivityEvent =
   | 'member_invited'
   | 'member_enabled'
   | 'member_disabled'
+  | 'member_removed'
   | 'member_doc_limit_reached';
 
 export interface ActivityLog {
@@ -249,11 +266,12 @@ export interface AppSettings {
   emailReminders: boolean;
   cloudAiEnabled: boolean;
   privacyMode: boolean;
+  /** When false, uploads skip OCR — user enters fields manually after each upload. */
+  documentProcessingEnabled?: boolean;
   /** Unlock app with device biometrics (WebAuthn) on open */
   biometricLockEnabled?: boolean;
   /** @deprecated Replaced by biometricLockEnabled */
   lockPin?: string;
-  recoveryCode?: string;
   onboardingComplete: boolean;
   consentedAt?: string;
   /** Family tab segmented control — defaults to Me */
@@ -261,6 +279,14 @@ export interface AppSettings {
   lastBackupAt?: string;
   lastBackupProvider?: 'file' | 'google_drive';
   lastDriveBackupFileId?: string;
+  /** Automatic encrypted backup to Google Drive (Pro). */
+  driveBackupSchedule?: 'off' | 'daily' | 'weekly';
+  /** Vibration on key taps — Android PWA only; no-op on iOS */
+  hapticFeedback?: boolean;
+  /** Welcome + product tour completed or skipped */
+  welcomeSeen?: boolean;
+  /** Browsing with seeded preview data before Google sign-in */
+  guestExplore?: boolean;
 }
 
 export interface ShareGrant {

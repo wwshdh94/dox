@@ -3,11 +3,13 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import { ocrApiPlugin } from './vite.ocrApiPlugin';
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    ocrApiPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
@@ -64,5 +66,11 @@ export default defineConfig({
   ],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
+  },
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
 });

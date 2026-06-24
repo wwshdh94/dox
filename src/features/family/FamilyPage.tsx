@@ -12,8 +12,8 @@ import { MemberAvatar } from '@/components/MemberAvatar';
 import { docsForMemberByDomain, isHealthDomainDoc } from '@/lib/docTags';
 import { canViewDocument } from '@/lib/documentVisibility';
 import { MemberDocStats } from '@/components/MemberDocStats';
+import { MemberStatusLegend, MemberStatusLight } from '@/components/MemberStatusLight';
 import { getOwnerMember, getOtherFamilyMembers } from '@/lib/family';
-import { memberHasJoined, memberLastActiveLabel } from '@/lib/memberActivity';
 import { MemberVaultContent } from '@/features/family/MemberVaultView';
 import { VaultSearchRow, vaultSearchInputClassName } from '@/features/family/VaultSearchRow';
 import { memberFamilyDocStats } from '@/lib/memberStats';
@@ -140,6 +140,7 @@ export function FamilyPage() {
                   Manage →
                 </Link>
               </div>
+              <MemberStatusLegend />
               {memberStats.length === 0 && (
                 <p className="text-sm text-muted">
                   No other family members yet.{' '}
@@ -154,7 +155,10 @@ export function FamilyPage() {
                     <div className="flex items-center gap-3.5">
                       <MemberAvatar member={member} size="sm" documents={documents} />
                       <div>
-                        <p className="font-semibold tracking-tight">{member.displayName}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold tracking-tight">{member.displayName}</p>
+                          <MemberStatusLight member={member} compact />
+                        </div>
                         <p className="text-xs text-muted">
                           {member.relationship} ·{' '}
                           <MemberDocStats
@@ -164,11 +168,7 @@ export function FamilyPage() {
                             onDueSoon={openDueDocuments}
                           />
                         </p>
-                        {memberHasJoined(member) ? (
-                          <p className="text-xs text-accent-ink">{memberLastActiveLabel(member)}</p>
-                        ) : (
-                          <p className="text-xs text-muted">Invite pending</p>
-                        )}
+                        <MemberStatusLight member={member} compact detailed />
                       </div>
                     </div>
                     {nearest?.expiryDate && <ExpiryChip date={nearest.expiryDate} />}

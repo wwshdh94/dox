@@ -51,6 +51,40 @@ function loadGoogleScript(): Promise<void> {
   return scriptPromise;
 }
 
+const TOKEN_CACHE_KEY = 'prevault-gdrive-token';
+
+interface CachedDriveToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
+function readCachedDriveToken(): CachedDriveToken | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  const raw = sessionStorage.getItem(TOKEN_CACHE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as CachedDriveToken;
+    if (!parsed.accessToken || !parsed.expiresAt) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedDriveToken(accessToken: string, expiresInSec = 3500): void {
+  if (typeof sessionStorage === 'undefined') return;
+  const payload: CachedDriveToken = {
+    accessToken,
+    expiresAt: Date.now() + expiresInSec * 1000,
+  };
+  sessionStorage.setItem(TOKEN_CACHE_KEY, JSON.stringify(payload));
+}
+
+export function clearGoogleDriveAccessTokenCache(): void {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.removeItem(TOKEN_CACHE_KEY);
+}
+
 export async function requestGoogleAccessToken(): Promise<string> {
   const clientId = getGoogleClientId();
   if (!clientId) throw new Error('Google Drive is not configured. Add VITE_GOOGLE_CLIENT_ID to .env');
@@ -66,11 +100,21 @@ export async function requestGoogleAccessToken(): Promise<string> {
           reject(new Error(resp.error ?? 'Google sign-in cancelled'));
           return;
         }
+        writeCachedDriveToken(resp.access_token);
         resolve(resp.access_token);
       },
     });
     client.requestAccessToken({ prompt: '' });
   });
+}
+
+/** Reuses cached token when valid — same Google account as sign-in. */
+export async function getGoogleDriveAccessToken(): Promise<string> {
+  const cached = readCachedDriveToken();
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.accessToken;
+  }
+  return requestGoogleAccessToken();
 }
 
 async function driveFetch(token: string, url: string, init?: RequestInit): Promise<Response> {

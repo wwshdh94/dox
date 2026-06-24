@@ -12,7 +12,11 @@
     "lint": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@connectrpc/connect-node": "^2.1.2",
+    "@paddleocr/paddleocr-js": "^0.4.2",
+    "@supabase/supabase-js": "^2.108.2",
     "idb": "^8.0.2",
+    "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -35,6 +39,6 @@
     "typescript": "~5.7.2",
     "vite": "^6.0.7",
     "vite-plugin-pwa": "^0.21.1",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.9"
   }
 }

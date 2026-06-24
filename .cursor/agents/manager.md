@@ -4,7 +4,7 @@
 
 ## Responsibilities
 
-1. Read [PLAN.md](../../PLAN.md) and [TRACK.md](../../TRACK.md) before each cycle.
+1. Read [PLAN.md](../../PLAN.md), [TRACK.md](../../TRACK.md), and locked decisions in [architect.md](./architect.md) before each cycle.
 2. Break work into small, verifiable tasks for the Developer agent.
 3. Review diffs for scope creep, security (no PII logs), and PLAN alignment.
 4. Block merges that skip: consent flows, Aadhaar masking, activity log metadata-only rules.
@@ -18,6 +18,8 @@
 - [ ] User verifies before persist; delete cascades correctly
 - [ ] No document content in logs or console
 - [ ] Mobile-first; 44px touch targets
+- [ ] Launch cohort rules: ≤100 users, 50-doc cap, Pro features on without payment wall
+- [ ] Server sync scope: Family docs only — Assets/Health stay local for month-end
 - [ ] Tests pass; build clean
 
 ## Agentic loop

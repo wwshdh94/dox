@@ -3,6 +3,7 @@ import { postAdminWebhook } from '@/lib/adminWebhook';
 import {
   __adminListAllFeedback,
   __adminUpdateFeedback,
+  isQualityFeedbackMessage,
   type FeedbackItem,
   type FeedbackStatus,
 } from '@/lib/feedback';
@@ -47,12 +48,31 @@ export function adminSetFeedbackStatus(id: string, status: FeedbackStatus): Feed
   const updated = __adminUpdateFeedback(id, { status });
   if (!updated) return null;
 
+  return updated;
+}
+
+export function adminApproveFeedbackQuality(id: string): FeedbackItem | null {
+  const items = __adminListAllFeedback();
+  const item = items.find((f) => f.id === id);
+  if (!item) return null;
+  if (!isQualityFeedbackMessage(item.message)) return null;
+
+  const updated = __adminUpdateFeedback(id, { adminQualityApproved: true });
+  if (!updated) return null;
+
   appendAdminEvent({
-    type: 'feedback_status_changed',
+    type: 'feedback_quality_approved',
     householdUserId: updated.userId,
     householdEmail: updated.userEmail,
-    meta: { feedbackId: id, status },
+    meta: { feedbackId: id },
   });
 
   return updated;
+}
+
+export function adminRevokeFeedbackQuality(id: string): FeedbackItem | null {
+  return __adminUpdateFeedback(id, {
+    adminQualityApproved: false,
+    adminQualityApprovedAt: undefined,
+  });
 }

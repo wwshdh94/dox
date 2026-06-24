@@ -23,7 +23,7 @@ export function BlockedAccountPage() {
               Reason: {block.reason}
             </p>
           ) : null}
-          <Button variant="secondary" className="w-full" onClick={() => signOut()}>
+          <Button variant="secondary" className="w-full" onClick={() => void signOut()}>
             Sign out
           </Button>
         </div>

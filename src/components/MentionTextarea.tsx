@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { FamilyMember } from '@/types';
+import { MAX_DOCUMENT_NOTES_CHARS } from '@/lib/inputLimits';
 import { mentionSuggestions } from '@/lib/noteMentions';
 
 export function MentionTextarea({
@@ -10,6 +11,7 @@ export function MentionTextarea({
   members,
   placeholder,
   autoFocus,
+  maxLength = MAX_DOCUMENT_NOTES_CHARS,
 }: {
   label: string;
   value: string;
@@ -18,6 +20,7 @@ export function MentionTextarea({
   members: FamilyMember[];
   placeholder?: string;
   autoFocus?: boolean;
+  maxLength?: number;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mentionStart, setMentionStart] = useState<number | null>(null);
@@ -66,8 +69,9 @@ export function MentionTextarea({
         autoFocus={autoFocus}
         placeholder={placeholder ?? 'Type @ to mention a family member'}
         onChange={(e) => {
-          onChange(e.target.value);
-          updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
+          const next = e.target.value.slice(0, maxLength);
+          onChange(next);
+          updateMentionState(next, Math.min(e.target.selectionStart ?? next.length, next.length));
         }}
         onClick={(e) =>
           updateMentionState(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)
@@ -82,6 +86,7 @@ export function MentionTextarea({
           }, 150);
         }}
         className="min-h-28 w-full rounded-2xl border border-border bg-surface-elevated px-4 py-3 text-sm text-text shadow-sm outline-none transition-colors placeholder:text-placeholder focus:border-accent focus:ring-2 focus:ring-accent-soft"
+        maxLength={maxLength}
       />
       {suggestions.length > 0 ? (
         <ul className="absolute bottom-full left-0 z-10 mb-1 max-h-40 w-full overflow-y-auto rounded-xl border border-border bg-surface-elevated py-1 shadow-lg">
@@ -102,7 +107,9 @@ export function MentionTextarea({
           ))}
         </ul>
       ) : null}
-      <p className="text-[0.65rem] text-muted">Use @name to notify a family member about this note.</p>
+      <p className="text-[0.65rem] text-muted">
+        Use @name to notify a family member. {value.length}/{maxLength} characters.
+      </p>
     </label>
   );
 }

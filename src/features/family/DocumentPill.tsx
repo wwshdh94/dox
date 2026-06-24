@@ -4,7 +4,7 @@ import { Card } from '@/components/Card';
 import { DocTypeIcon } from '@/components/DocTypeIcon';
 import { ExpiryChip } from '@/components/ExpiryChip';
 import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
-import { isDocumentReviewed } from '@/lib/documentReview';
+import { isDocumentReviewed, normalizeReviewStatus } from '@/lib/documentReview';
 import { resolveDocTags } from '@/lib/docTags';
 import { primaryRevealValue, normalizeDocFields } from '@/lib/docFields';
 import { maskAadhaar, maskValue } from '@/lib/format';
@@ -112,7 +112,11 @@ export function DocumentPill({
           </div>
           <div className={`flex items-center justify-between ${compact ? 'gap-1' : 'gap-1.5'}`}>
             <div className="flex min-w-0 flex-1 items-center">
-              {value && isDocumentReviewed(document) ? (
+              {normalizeReviewStatus(document) === 'processing' ? (
+                <span className={`text-muted ${compact ? 'text-[0.65rem]' : 'text-xs'}`}>
+                  OCR processing…
+                </span>
+              ) : value && isDocumentReviewed(document) ? (
                 <>
                   <span
                     className={`truncate font-mono text-text ${compact ? 'text-[0.65rem]' : 'text-xs'}`}

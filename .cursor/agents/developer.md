@@ -6,7 +6,7 @@
 
 1. Implement tasks from Manager spec only — surgical diffs.
 2. Follow [AGENTS.md](../../AGENTS.md) file conventions under `src/features/`.
-3. Use Zustand + IndexedDB for local-first; Supabase when env configured.
+3. Use Zustand + IndexedDB for local-first; Supabase when env configured — follow [architect.md](./architect.md) locked decisions for sync scope.
 4. On-device OCR/mock extraction first; cloud AI behind Pro + consent toggle.
 5. Write Vitest tests for store logic, utils, and critical flows.
 

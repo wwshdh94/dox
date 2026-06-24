@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  childRelationshipForGender,
   eligibleParentMembers,
+  genderForRelationship,
   guardianMemberIds,
   isChildRelationship,
   isGuardianOfMember,
@@ -40,6 +42,13 @@ describe('memberRelations', () => {
   it('detects child relationships', () => {
     expect(isChildRelationship('Son')).toBe(true);
     expect(isChildRelationship('Spouse')).toBe(false);
+  });
+
+  it('syncs son/daughter with gender', () => {
+    expect(genderForRelationship('Son')).toBe('male');
+    expect(genderForRelationship('Daughter')).toBe('female');
+    expect(childRelationshipForGender('male')).toBe('Son');
+    expect(childRelationshipForGender('female')).toBe('Daughter');
   });
 
   it('marks members under 18 as minors', () => {

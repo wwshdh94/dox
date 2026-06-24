@@ -449,6 +449,93 @@ Example schema (purchase receipt / invoice):
 }
 ```
 
+### OCR accuracy program (on-device)
+
+**Goal:** Raise **field-level** accuracy on Indian identity documents (PAN, Aadhaar, passport, driving license, voter ID) without sending images to cloud by default. Optimize for correct critical fields + manageable human review — not marketing “99% page OCR.”
+
+**Reference:** [Docsumo — Improving OCR accuracy](https://www.docsumo.com/blog/improving-ocr-accuracy) (framework only; not a vendor dependency). Key insight: preprocessing + validation + measurement matter more than swapping engines alone.
+
+#### Principles
+
+| Principle | PreVault application |
+|-----------|----------------------|
+| Field accuracy > character/page accuracy | Track `panNumber`, `aadhaarNumber`, `expiryDate` — one wrong digit fails KYC |
+| Structured paths before OCR | Aadhaar Secure QR, passport MRZ — highest precision when available |
+| Detect-then-read | Doc-type ROI crops (`src/lib/ocrRegions.ts`) before full-page OCR |
+| Validate, don’t hallucinate | Regex, Verhoeff, PAN entity-type, MRZ format — **no LLM spell-fix on PII** |
+| Human verify is a feature | Low-confidence fields flagged; user confirms before persist |
+| Measure on our documents | Golden eval set with ground truth — not vendor benchmarks |
+
+#### Current baseline (2026-06)
+
+| Layer | Status |
+|-------|--------|
+| Aadhaar Secure QR (client-side) | Shipped — `src/lib/aadhaarQr.ts` |
+| PaddleOCR.js + Tesseract `eng+hin` fallback | Shipped — `src/lib/ocrPaddle.ts`, `src/lib/ocrImage.ts` |
+| Preprocess (upscale, denoise, binarize, contrast) | Shipped — `src/lib/ocrPreprocess.ts` |
+| Doc-type ROI + orientation adjust | Shipped — `src/lib/ocrRegions.ts` |
+| Field parsers (PAN, Aadhaar, MRZ, DL, voter ID) | Shipped — `src/lib/idDocParser.ts` |
+| User-selected doc type drives extraction | Shipped — upload + `ocr.ts` |
+| ImageEditor perspective crop → OCR | **Not wired** — biggest mobile-capture gap |
+| Field-level confidence in verify UI | **Partial** — review flow exists; per-field scores not shown |
+| Golden eval set + regression | **Not started** |
+| Cross-field validation | **Minimal** |
+| Pre-OCR quality gate (“retake photo”) | **Not started** |
+| Cloud AI (Azure / vision) | Deferred — opt-in Pro path when ready |
+
+#### Phased steps
+
+**Phase 2a — Golden eval set (foundation)**
+
+- [ ] Create `docs/ocr-golden/` — `README.md` (PII policy: redacted specimens + own uploads only), `manifest.csv`, `images/`
+- [ ] Schema per row: `doc_type`, `page`, `image_file`, `source` (camera/scan), `orientation`, `lighting`, `has_qr`, `extracted_*`, `correct_*` (user-filled), `notes`
+- [ ] Target: **5 doc types × 5–10 varied captures** (glare, tilt, low light, old vs new card design, front+back for Aadhaar/DL)
+- [ ] Agent-written `REPORT.md` — common layout patterns across types (what ROIs can share vs per-type)
+- [ ] Vitest or script: `runOcrOnGoldenSet()` → field accuracy % per type — baseline before further tuning
+
+**Phase 2b — Capture pipeline**
+
+- [ ] Pass **ImageEditor crop quad** into OCR preprocess (deskew/dewarp before ROI) — `src/lib/imageEdit.ts` → `ocrPreprocess.ts`
+- [ ] Pre-OCR **quality gate**: blur/glare/low-resolution heuristics → prompt “Adjust crop or retake” (no silent bad reads)
+- [ ] Upload copy: phone-photo guidance (fill frame, avoid glare) — not 300 DPI scanner policy
+
+**Phase 2c — Extraction + validation**
+
+- [ ] **Field-level confidence** on verify screen — highlight fields below threshold; critical fields (ID numbers, expiry) stricter than names
+- [ ] **Cross-field rules**: DOB plausible; passport expiry > issue; Aadhaar checksum; PAN format; MRZ line consistency
+- [ ] **Hindi / Devanagari ROIs** on Aadhaar (name, address) — separate region + `hin` tessdata where needed
+- [ ] Tune ROI coordinates from golden set failures (per card generation: old Aadhaar, e-Aadhaar, PVC PAN)
+- [ ] RC + insurance schemas + ROIs (extends program beyond identity docs — Phase 2 exit criteria)
+
+**Phase 2d — Regression loop**
+
+- [ ] CI or local gate: golden set field accuracy must not regress on parser/ROI changes
+- [ ] Tag failure buckets in manifest: `qr_present`, `hindi_text`, `masked_aadhaar`, `mrz_only`, `glare`, `skew`
+- [ ] Quarterly: add 10–20 new real-world (redacted) samples from beta users with consent
+
+**Phase 2e — Cloud opt-in (when approved)**
+
+- [ ] Escalate only when on-device confidence low **and** user opts in (Pro)
+- [ ] Azure `prebuilt-idDocument` or equivalent for passport/DL hard cases
+- [ ] Never auto-send Aadhaar to cloud without explicit consent + legal sign-off
+
+#### Metrics (track in golden set + production metadata)
+
+| Metric | Target (identity docs, on-device) |
+|--------|-----------------------------------|
+| **Field accuracy** — critical fields (ID no., expiry) | ≥95% on golden set |
+| **Field accuracy** — names, addresses | ≥90% (Hindi harder) |
+| **Form accuracy** — all required fields correct | ≥85% single-page capture |
+| **QR-first Aadhaar** — demographic fields from Secure QR | ≥98% when QR present |
+| **Verify completion rate** | >85% (existing success metric) |
+
+#### Explicitly out of scope (for now)
+
+- Ensemble multiple cloud OCR engines (cost, privacy)
+- LLM-based character correction on extracted PII (hallucination risk)
+- Chasing 99% page-level character accuracy as a product goal
+- Scraping real ID photos from the internet for training data
+
 ### Purchase & warranty records
 
 **Job to be done:** "I bought a Mac — scan the bill once; amount, store, warranty, and contact are always findable."
@@ -1159,6 +1246,104 @@ MVP PWA built in `src/` — demo mode (local-first). Run `npm run dev`.
 | WebAuthn PRF not on all devices | PIN fallback; progressive enhancement |
 | User trust | Zero-knowledge messaging; transparent privacy policy; optional local-only mode later |
 | Visiting card proximity expectations | NameDrop/AirDrop not possible in PWA; market as QR + NFC tag + share sheet |
+
+---
+
+## Production feature plan (2026-06-23)
+
+Feature readiness for **hosted Prod** — complements [docs/PRODUCTION_MVP_GAP_ANALYSIS.md](./docs/PRODUCTION_MVP_GAP_ANALYSIS.md).
+
+### Already in good shape (reuse, not rebuild)
+
+| Area | Notes |
+|------|--------|
+| PWA shell, theme, Family / Assets / Health tabs | Done |
+| Google OAuth + Supabase household + encrypted Storage (P3) | Done on Dev |
+| Upload → OCR → verify → review | On-device OCR v2 + ROI parsers |
+| Family ACL + `share_grants` sync code | Needs UAT proof with two accounts |
+| Temp share, bundles, backup/restore, visiting card | Local-first; verify on hosted URL |
+| Launch cohort + lifetime Pro tasks, 50-doc/member cap | Migrations 006 pending on server |
+| Account lifecycle, admin dashboard, feedback, input limits | Done |
+
+### Must-have for Prod
+
+Without these, launch is a polished demo—not a real vault.
+
+**Infrastructure & environments**
+
+| Item | Why |
+|------|-----|
+| 3 Supabase projects (Dev / UAT / Prod; Mumbai for Prod) | Residency + safe promotion |
+| Hosted PWA with per-env `VITE_*` | Installable on phones |
+| `VITE_DEMO_AUTH=false` on Prod | Real accounts only |
+| OCR API deployed (`VITE_OCR_API_URL`) | Cloud extraction for launch cohort |
+| Migrations 006 + 007 applied | Cohort limits + account lifecycle |
+| CI: test + build on PR | Launch-week regression safety |
+
+**Core vault promise (UAT sign-off)**
+
+| Item | Why |
+|------|-----|
+| Two-account smoke: upload → invite → join → granted docs only | Family sharing must work |
+| Upload → encrypt → Storage → preview after refresh | Multi-device, not localStorage |
+| 50-doc cap enforced server-side | Launch rule |
+| RLS audit PASS (Security Chief) | No cross-household leaks |
+| Share grants + RLS mirror `canViewDocument` | Trustworthy ACL |
+
+**Legal & compliance (DPDP / Aadhaar)**
+
+| Item | Why |
+|------|-----|
+| Standalone Terms of Service page (`/terms`) | Consent checkbox exists; no route today |
+| Standalone Privacy Policy page (`/privacy`) | Same |
+| Grievance officer contact published | DPDP requirement |
+| Legal sign-off for Aadhaar marketing | TRACK blocker |
+| No PII in logs/analytics | Ongoing |
+
+**End-to-end flows on Prod**
+
+Sign up → consent → onboarding → upload → verify → review → temp share → backup → account delete.
+
+**Launch cohort (server truth)**
+
+Cohort cap ≤100, lifetime Pro flags synced, OCR API rate limits.
+
+### Good to have (strong launch; slip 1–2 weeks OK)
+
+| Feature | Notes |
+|---------|--------|
+| Push expiry reminders | UI toggle exists; no Web Push backend yet |
+| RC + Insurance OCR schemas | Phase 2 exit criteria |
+| Field-level confidence on verify screen | Highlight weak extractions |
+| Share Target SW handler | Manifest only today |
+| Error monitoring (no PII) | Sentry or equivalent |
+| Landing / marketing page | Security Center story |
+| Launch tasks synced to Supabase | Progress survives reinstall |
+| OCR golden eval + regression | On hold |
+| ImageEditor crop → OCR deskew | Mobile capture accuracy |
+| Beta ~20 households | Real-world signal |
+
+### Nice to have (post-launch — do not block Prod)
+
+| Feature | Phase |
+|---------|--------|
+| Email reminders | Phase 3 (hidden in UI) |
+| Razorpay / subscriptions | Post-launch |
+| Assets + Health server sync | Family docs only at launch |
+| WebAuthn PRF / true E2E encryption | Pro tier |
+| Azure / extra cloud OCR | Optional Pro |
+| DigiLocker import | Backlog |
+| Hindi + regional UI/OCR | Phase 5 |
+| Visiting card NFC | Phase 6 |
+| WhatsApp reminder bot | Backlog |
+| Play Store TWA | Optional |
+| Fleet/business admin | Backlog |
+
+### Suggested priority (feature work)
+
+1. **Week 1 (must):** Legal pages, UAT two-account smoke, RLS sign-off, Prod deploy, OCR API + rate limits  
+2. **Week 2 (good):** Push reminders, RC/Insurance OCR, verify confidence UI, CI + monitoring, landing page  
+3. **Later:** Share Target SW, Assets/Health sync, billing, OCR accuracy program
 
 ---
 

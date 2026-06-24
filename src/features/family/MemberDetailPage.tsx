@@ -4,6 +4,7 @@ import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
 import { useVaultStore } from '@/store/useVaultStore';
+import { MemberInviteSection } from '@/features/family/MemberInviteSection';
 import { MemberVaultView } from '@/features/family/MemberVaultView';
 
 export function MemberDetailPage() {
@@ -27,6 +28,7 @@ export function MemberDetailPage() {
     <div className="min-h-full pb-28">
       <Header backFallback="/" />
       <main className="page-main animate-fade-up space-y-5">
+        <MemberInviteSection member={member} variant="actions" />
         <MemberVaultView memberId={member.id} />
       </main>
       <BottomNav />

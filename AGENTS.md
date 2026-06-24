@@ -15,7 +15,7 @@ See [PLAN.md](./PLAN.md) for market research, architecture, and phased roadmap. 
 | **Differentiator** | Family-first UX + Assets tab + optional AI + expiry reminders + temp share |
 | **Security** | E2E encryption, WebAuthn biometric unlock, **Security Center** UI, zero-knowledge where possible |
 | **Auth** | **Google Sign-In** (Supabase OAuth) + Terms/Privacy consent at signup |
-| **Monetization** | Freemium — free tier (limited docs/reminders); Pro (unlimited + family + visiting card); Family plan (sharing) |
+| **Monetization** | Launch cohort (≤100): all Pro features; 50 docs/member; tasks → lifetime Pro; Razorpay post-launch |
 
 ---
 
@@ -142,4 +142,4 @@ Any feature deferred by the user → add to PLAN.md § Potential Ideas.
 
 ## Agentic development loop
 
-See [docs/AGENTIC_LOOP.md](./docs/AGENTIC_LOOP.md) — Manager, Developer, Tester agents in `.cursor/agents/`.
+See [docs/AGENTIC_LOOP.md](./docs/AGENTIC_LOOP.md) — Manager, Developer, Tester loop plus **Environment**, **Architect**, and **Security Chief** agents for Dev/UAT/Prod and production MVP.

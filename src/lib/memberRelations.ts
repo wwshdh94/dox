@@ -1,6 +1,6 @@
 import { getOwnerMember } from '@/lib/family';
 import { inferMemberBirthDate, memberAgeYears } from '@/lib/memberAge';
-import type { Document, FamilyMember } from '@/types';
+import type { Document, FamilyMember, MemberGender } from '@/types';
 
 export const MEMBER_RELATIONSHIPS = [
   'Spouse',
@@ -21,6 +21,19 @@ const CHILD_RELATIONSHIPS = new Set(['son', 'daughter', 'child']);
 
 export function isChildRelationship(relationship: string): boolean {
   return CHILD_RELATIONSHIPS.has(relationship.trim().toLowerCase());
+}
+
+export function genderForRelationship(relationship: string): MemberGender | '' {
+  const rel = relationship.trim().toLowerCase();
+  if (rel === 'son') return 'male';
+  if (rel === 'daughter') return 'female';
+  return '';
+}
+
+export function childRelationshipForGender(gender: MemberGender | ''): MemberRelationship | null {
+  if (gender === 'male') return 'Son';
+  if (gender === 'female') return 'Daughter';
+  return null;
 }
 
 export function memberBirthDate(member: FamilyMember, documents: Document[]): string | undefined {

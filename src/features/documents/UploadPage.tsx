@@ -4,10 +4,15 @@ import { Button } from '@/components/Button';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { LoadingOverlay } from '@/components/LoadingScreen';
-import { Input, RadioGroup, Select } from '@/components/Input';
+import { Input, Select, RadioGroup } from '@/components/Input';
 import { MentionTextarea } from '@/components/MentionTextarea';
-import { extractOnDevice, findDuplicate } from '@/lib/ocr';
+import { extractDocumentAuto, findDuplicate } from '@/lib/ocr';
+import { canUseCloudAi } from '@/lib/planLimits';
+import { isDocumentProcessingEnabled } from '@/lib/documentProcessing';
+import { isCloudOcrAllowed } from '@/lib/ocrCloud';
 import { readFileDataUrl } from '@/lib/files';
+import { autoPrepareImageFile } from '@/lib/imagePipeline';
+import { compressImageFile } from '@/lib/imageCompress';
 import { inferDocTags, CATEGORY_LABELS, DOC_CATEGORIES, DOC_DOMAINS, DOMAIN_LABELS, suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags } from '@/lib/docTags';
 import { memberSelectLabel } from '@/lib/family';
 import { emptyFieldsFor, fieldSchemaFor, normalizeDocFields, documentExpiryFromFields, computeWarrantyEndDate, usesFieldBasedExpiry } from '@/lib/docFields';
@@ -22,20 +27,35 @@ import {
   countVerifiedDocuments,
   remainingVerificationSlots,
 } from '@/lib/verificationQueue';
-import { getDocumentsNeedingReview, isDocumentUnderReview } from '@/lib/documentReview';
+import { getDocumentsNeedingReview, isDocumentUnderReview, isDocumentPendingDetails } from '@/lib/documentReview';
 import { checkCanAddDocument } from '@/lib/documentLimits';
+import {
+  MAX_DOCUMENT_TITLE_CHARS,
+  sanitizeDocumentNotes,
+  sanitizeDocumentTitle,
+  validateDocumentFilePayload,
+  validatePageCount,
+  validateUploadFile,
+} from '@/lib/inputLimits';
 import { canManageDocument, canViewDocument } from '@/lib/documentVisibility';
-import { isEditableCameraImage } from '@/lib/imageEdit';
 import type { UploadNavigationState } from '@/lib/uploadNavigation';
 import {
   initialDocTypeFromUploadParams,
   initialMemberIdFromUploadParams,
 } from '@/lib/uploadNavigation';
+import {
+  resolveDocTypeAfterOcr,
+  storageDocType,
+  type SelectedDocType,
+} from '@/lib/ocrRecognition';
 import { ImageEditor } from '@/components/ImageEditor';
+import { DocumentFilePreview } from '@/components/DocumentFilePreview';
+import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
 import { useVaultStore } from '@/store/useVaultStore';
 import type { DocCategory, DocDomain, DocType } from '@/types';
 
-type ExtractMode = 'on_device' | 'cloud';
+type UploadStep = 'pick' | 'edit' | 'verify';
+type EditTarget = 'new' | 'replace';
 
 const ALL_DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'passport', label: 'Passport' },
@@ -57,6 +77,11 @@ const ALL_DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'purchase_receipt', label: 'Purchase / Invoice' },
   { value: 'warranty', label: 'Warranty card' },
   { value: 'other', label: 'Other' },
+];
+
+const DOC_TYPE_SELECT_OPTIONS: { value: SelectedDocType; label: string }[] = [
+  { value: '', label: 'Choose document type…' },
+  ...ALL_DOC_TYPES,
 ];
 
 const ASSET_DOC_TYPES: DocType[] = [
@@ -82,14 +107,21 @@ export function UploadPage() {
   const isEdit = Boolean(editId);
   const editingDoc = isEdit ? documents.find((d) => d.id === editId) : undefined;
 
+  const [files, setFiles] = useState<File[]>([]);
+  const [draftFile, setDraftFile] = useState<File | null>(null);
+  const [editQueue, setEditQueue] = useState<File[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [extractMode, setExtractMode] = useState<ExtractMode>('on_device');
-  const [step, setStep] = useState<'pick' | 'edit' | 'verify'>(isEdit ? 'verify' : 'pick');
+  const [editTarget, setEditTarget] = useState<EditTarget>('new');
+  const [step, setStep] = useState<UploadStep>(isEdit ? 'verify' : 'pick');
   const isHealth = params.get('context') === 'health';
-  const [docType, setDocType] = useState<DocType>(() => initialDocTypeFromUploadParams(params));
+  const initialDocType = initialDocTypeFromUploadParams(params);
+  const [docType, setDocType] = useState<SelectedDocType>(() => initialDocType);
+  const [userPickedDocType, setUserPickedDocType] = useState(() => initialDocType !== '');
   const [memberId, setMemberId] = useState(() => initialMemberIdFromUploadParams(params, members));
   const [assetId] = useState(params.get('asset') ?? '');
-  const [fields, setFields] = useState<Record<string, string>>(() => emptyFieldsFor(docType));
+  const [fields, setFields] = useState<Record<string, string>>(() =>
+    emptyFieldsFor(storageDocType(initialDocType)),
+  );
   const [title, setTitle] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -100,11 +132,13 @@ export function UploadPage() {
   const [limitError, setLimitError] = useState('');
   const [replacedFile, setReplacedFile] = useState(false);
   const [needsValidation, setNeedsValidation] = useState(false);
+  const [needsDocTypeSelection, setNeedsDocTypeSelection] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [domain, setDomain] = useState<DocDomain>('family');
   const [category, setCategory] = useState<DocCategory>('identity');
   const [editAssetId, setEditAssetId] = useState('');
+  const [replacePreviewUrl, setReplacePreviewUrl] = useState<string | undefined>();
   const navigate = useNavigate();
   const location = useLocation();
   const backTo = isEdit ? `/documents/${editId}` : uploadBackPath(params);
@@ -116,9 +150,42 @@ export function UploadPage() {
   const assetSlotsLeft = user ? remainingAssetSlots(user, assets.length) : null;
   const verifySlotsLeft = user ? remainingVerificationSlots(user, documents) : null;
   const canStage = canStageDocument(user, documents);
+  const processingEnabled = isDocumentProcessingEnabled(settings);
+  const {
+    fileDataUrl: storedFileDataUrl,
+    additionalFileDataUrls: storedAdditionalFileDataUrls,
+    loading: storedFileLoading,
+    error: storedFileError,
+  } = useDocumentFileUrl(isEdit ? editingDoc : undefined);
 
-  const isPurchase = params.get('type') === 'purchase' || docType === 'purchase_receipt';
+  const isPurchase =
+    params.get('type') === 'purchase' || storageDocType(docType) === 'purchase_receipt';
   const isCamera = params.get('source') === 'camera';
+
+  const applyDocTypeChange = (next: SelectedDocType) => {
+    const picked = next !== '';
+    setDocType(next);
+    setUserPickedDocType(picked);
+    setNeedsDocTypeSelection(false);
+    const stored = storageDocType(next);
+    setFields(emptyFieldsFor(stored));
+    setExpiryDate('');
+    setDuplicate(null);
+    setCategory(suggestedCategoryForDocType(stored));
+    setDomain(
+      suggestedDomainForDocType(stored, {
+        memberId,
+        assetId: editAssetId || assetId || undefined,
+        uploadContext: isHealth ? 'health' : undefined,
+      }),
+    );
+    if (stored === 'purchase_receipt') {
+      setUnderWarranty('');
+      setWarrantyDuration('');
+    } else {
+      setUnderWarranty('');
+    }
+  };
 
   useEffect(() => {
     const verifyId = params.get('verify');
@@ -132,7 +199,15 @@ export function UploadPage() {
     if (!editingDoc) return;
     setStep('verify');
     setTitle(editingDoc.title);
-    setDocType(editingDoc.docType);
+    if (editingDoc.needsDocTypeSelection) {
+      setDocType('');
+      setUserPickedDocType(false);
+      setNeedsDocTypeSelection(true);
+    } else {
+      setDocType(editingDoc.docType);
+      setUserPickedDocType(true);
+      setNeedsDocTypeSelection(false);
+    }
     setExpiryDate(editingDoc.expiryDate ?? '');
     setNotes(editingDoc.notes ?? '');
     setFields(normalizeDocFields(editingDoc.docType, editingDoc.fields));
@@ -150,6 +225,20 @@ export function UploadPage() {
       setUnderWarranty('');
     }
   }, [isEdit, editingDoc?.id]);
+
+  useEffect(() => {
+    if (!file) {
+      setReplacePreviewUrl(undefined);
+      return;
+    }
+    let cancelled = false;
+    void readFileDataUrl(file).then((url) => {
+      if (!cancelled) setReplacePreviewUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   useEffect(() => {
     if (!isPurchase || underWarranty !== 'yes' || !warrantyDuration) return;
@@ -170,17 +259,64 @@ export function UploadPage() {
     setWarrantyDuration('');
   }, [isPurchase, underWarranty]);
 
-  const applyPickedFile = (picked: File, options?: { skipEdit?: boolean }) => {
-    if (!options?.skipEdit && isCamera && isEditableCameraImage(picked)) {
-      setFile(picked);
-      setStep('edit');
-      setTitle(picked.name.replace(/\.[^.]+$/, ''));
+  const applyPickedFiles = async (picked: File[], options?: { skipEdit?: boolean }) => {
+    if (picked.length === 0) return;
+
+    for (const file of picked) {
+      const check = validateUploadFile(file);
+      if (!check.ok) {
+        setLimitError(check.message);
+        return;
+      }
+    }
+
+    const pageCheck = validatePageCount(files.length, picked.length);
+    if (!pageCheck.ok) {
+      setLimitError(pageCheck.message);
       return;
     }
-    setFile(picked);
-    setExtractMode('on_device');
-    setTitle(picked.name.replace(/\.[^.]+$/, ''));
-    setStep('pick');
+
+    setLimitError('');
+    const images = picked.filter((f) => f.type.startsWith('image/'));
+    const pdfs = picked.filter((f) => !f.type.startsWith('image/'));
+
+    if (!options?.skipEdit && images.length > 0) {
+      const [first, ...rest] = images;
+      setEditQueue(rest);
+      setDraftFile(first);
+      setEditTarget('new');
+      setStep('edit');
+      if (files.length === 0) {
+        setTitle(first.name.replace(/\.[^.]+$/, ''));
+      }
+      if (pdfs.length > 0) {
+        setFiles((prev) => [...prev, ...pdfs]);
+      }
+      return;
+    }
+
+    if (pdfs.length > 0) {
+      setFiles((prev) => [...prev, ...pdfs]);
+      if (files.length === 0 && pdfs[0]) {
+        setTitle(pdfs[0].name.replace(/\.[^.]+$/, ''));
+      }
+      setStep('pick');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const prepared = await Promise.all(
+        images.map((f) => autoPrepareImageFile(f)),
+      );
+      setFiles((prev) => [...prev, ...prepared]);
+      if (files.length === 0 && prepared[0]) {
+        setTitle(prepared[0].name.replace(/\.[^.]+$/, ''));
+      }
+      setStep('pick');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   useEffect(() => {
@@ -190,33 +326,83 @@ export function UploadPage() {
     if (!picked) return;
 
     consumedNavFileRef.current = true;
-    applyPickedFile(picked);
+    void applyPickedFiles([picked]);
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
   }, [isEdit, location.pathname, location.search, location.state, navigate]);
 
   const handlePickInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = e.target.files?.[0] ?? null;
+    const list = e.target.files ? Array.from(e.target.files) : [];
     e.target.value = '';
-    if (picked) applyPickedFile(picked);
+    if (list.length > 0) void applyPickedFiles(list);
   };
 
-  const handleEditDone = (edited: File) => {
-    applyPickedFile(edited, { skipEdit: true });
+  const openAddPage = () => {
+    (isCamera ? cameraInputRef : fileInputRef).current?.click();
+  };
+
+  const handleEditDone = async (edited: File, addAnother = false) => {
+    setProcessing(true);
+    try {
+      const fileCheck = validateUploadFile(edited);
+      if (!fileCheck.ok) {
+        setLimitError(fileCheck.message);
+        return;
+      }
+      const pageCheck = validatePageCount(files.length, 1);
+      if (!pageCheck.ok) {
+        setLimitError(pageCheck.message);
+        return;
+      }
+      let compressed: File;
+      try {
+        compressed = await compressImageFile(edited);
+      } catch {
+        setLimitError('Could not process this image. Try a smaller photo.');
+        return;
+      }
+      if (editTarget === 'replace') {
+        setFile(compressed);
+        setReplacedFile(true);
+        setDraftFile(null);
+        await runReplaceOcr(compressed);
+        setStep('verify');
+        setEditTarget('new');
+        return;
+      }
+
+      setFiles((prev) => [...prev, compressed]);
+
+      setEditQueue((queue) => {
+        if (queue.length > 0) {
+          setDraftFile(queue[0]!);
+          return queue.slice(1);
+        }
+        setDraftFile(null);
+        setStep('pick');
+        if (addAnother) {
+          window.setTimeout(() => openAddPage(), 0);
+        }
+        return [];
+      });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleRetake = () => {
-    setFile(null);
+    if (editTarget === 'replace') {
+      setDraftFile(null);
+      setStep('verify');
+      return;
+    }
+    setDraftFile(null);
+    setEditQueue([]);
     setStep('pick');
-    window.setTimeout(() => cameraInputRef.current?.click(), 0);
+    window.setTimeout(() => openAddPage(), 0);
   };
 
-  const openFilePicker = () => {
-    const input = isCamera ? cameraInputRef.current : fileInputRef.current;
-    input?.click();
-  };
-
-  const submitNewUpload = async (mode: ExtractMode) => {
-    if (!file) return;
+  const submitNewUpload = async () => {
+    if (files.length === 0) return;
     setLimitError('');
     setProcessing(true);
     try {
@@ -236,26 +422,38 @@ export function UploadPage() {
         return;
       }
 
-      const fileDataUrl = await readFileDataUrl(file);
-      const tags = inferDocTags(docType, {
+      const dataUrls = await Promise.all(files.map((f) => readFileDataUrl(f)));
+      const [fileDataUrl, ...rest] = dataUrls;
+      const additionalFileDataUrls = rest.length > 0 ? rest : undefined;
+      const payloadCheck = validateDocumentFilePayload(fileDataUrl, additionalFileDataUrls);
+      if (!payloadCheck.ok) {
+        setLimitError(payloadCheck.message);
+        return;
+      }
+
+      const stored = storageDocType(docType);
+      const tags = inferDocTags(stored, {
         memberId: isPurchase ? undefined : memberId || undefined,
         assetId: assetId || undefined,
         uploadContext: isHealth ? 'health' : undefined,
       });
-      const docTitle = title || file.name.replace(/\.[^.]+$/, '') || 'Document';
+      const docTitle = sanitizeDocumentTitle(title || files[0]!.name.replace(/\.[^.]+$/, '') || 'Document');
+      const combinedFileName =
+        files.length === 1 ? files[0]!.name : `${files[0]!.name} +${files.length - 1} more`;
 
       const id = addDocument({
         title: docTitle,
-        docType,
+        docType: stored,
         domain: tags.domain,
         category: tags.category,
         memberId: isPurchase ? undefined : memberId || undefined,
         assetId: assetId || undefined,
-        fields: emptyFieldsFor(docType),
-        notes: notes.trim() || undefined,
-        fileName: file.name,
+        fields: emptyFieldsFor(stored),
+        notes: sanitizeDocumentNotes(notes),
+        fileName: combinedFileName,
         fileDataUrl,
-        reviewStatus: 'processing',
+        additionalFileDataUrls,
+        reviewStatus: processingEnabled ? 'processing' : 'pending_details',
       });
 
       if (!id) {
@@ -263,21 +461,111 @@ export function UploadPage() {
         return;
       }
 
-      navigate(`/documents/${id}`);
-      void useVaultStore.getState().processNewUpload(id, {
-        fileName: file.name,
-        docType,
-        extractMode: mode,
-        fileDataUrl,
-      });
+      if (processingEnabled) {
+        navigate(backTo);
+        void useVaultStore.getState().processNewUpload(id, {
+          fileName: combinedFileName,
+          docType: stored,
+          userPickedDocType,
+          fileDataUrl,
+          additionalFileDataUrls,
+        });
+      } else {
+        navigate(`/upload?edit=${id}`);
+      }
     } finally {
       setProcessing(false);
     }
   };
 
   const runExtract = async () => {
-    if (!file) return;
-    await submitNewUpload(extractMode);
+    if (files.length === 0) return;
+    await submitNewUpload();
+  };
+
+  const runReplaceOcr = async (picked: File) => {
+    setOcrLoading(true);
+    setLimitError('');
+    try {
+      if (!processingEnabled) {
+        const requested = storageDocType(docType);
+        setFields(
+          Object.fromEntries(
+            Object.entries(emptyFieldsFor(requested)).map(([k, v]) => [k, String(v ?? '')]),
+          ),
+        );
+        setNeedsValidation(true);
+        return;
+      }
+
+      const fileDataUrl = picked.type.startsWith('image/') ? await readFileDataUrl(picked) : undefined;
+      const cloudAllowed =
+        isCloudOcrAllowed(settings, canUseCloudAi(user)) &&
+        (settings.cloudAiEnabled || import.meta.env.DEV);
+      const requested = storageDocType(docType);
+      const result = await extractDocumentAuto({
+        fileName: picked.name,
+        docType: requested,
+        fileDataUrl,
+        cloudAllowed,
+      });
+      const resolved = resolveDocTypeAfterOcr(requested, userPickedDocType, result);
+      setNeedsDocTypeSelection(resolved.needsDocTypeSelection);
+      if (resolved.needsDocTypeSelection) {
+        setDocType('');
+        setUserPickedDocType(false);
+        setFields({});
+      } else {
+        setDocType(resolved.docType);
+        setUserPickedDocType(true);
+        const mapped = normalizeDocFields(resolved.docType, resolved.fields);
+        setFields(
+          Object.fromEntries(
+            Object.entries(mapped).map(([k, v]) => [k, String(v ?? '')]),
+          ),
+        );
+      }
+      if (result.expiryDate && !resolved.needsDocTypeSelection) setExpiryDate(result.expiryDate);
+      const mapped = resolved.needsDocTypeSelection
+        ? {}
+        : normalizeDocFields(resolved.docType, resolved.fields);
+      const docTitle = mapped.productName
+        ? String(mapped.productName)
+        : picked.name.replace(/\.[^.]+$/, '');
+      if (docTitle) setTitle(docTitle);
+      const dup = findDuplicate(
+        documents.filter((d) => d.id !== editId),
+        resolved.docType,
+        resolved.fields,
+      );
+      setDuplicate(dup?.title ?? null);
+      setNeedsValidation(true);
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleReplacePick = async (picked: File | null) => {
+    if (!picked) {
+      setFile(null);
+      setReplacedFile(false);
+      setNeedsValidation(false);
+      return;
+    }
+    if (picked.type.startsWith('image/')) {
+      setDraftFile(picked);
+      setEditTarget('replace');
+      setStep('edit');
+      return;
+    }
+    setProcessing(true);
+    try {
+      setFile(picked);
+      setReplacedFile(true);
+      await runReplaceOcr(picked);
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const save = async () => {
@@ -287,15 +575,20 @@ export function UploadPage() {
         setLimitError('Document not found.');
         return;
       }
+      if (needsDocTypeSelection || docType === '') {
+        setLimitError('Choose a document type before saving.');
+        return;
+      }
 
-      const normalizedFields = normalizeDocFields(docType, fields);
-      const docExpiry = documentExpiryFromFields(docType, normalizedFields, expiryDate || undefined);
+      const stored = storageDocType(docType);
+      const normalizedFields = normalizeDocFields(stored, fields);
+      const docExpiry = documentExpiryFromFields(stored, normalizedFields, expiryDate || undefined);
 
-      if (docType === 'purchase_receipt' && !underWarranty) {
+      if (stored === 'purchase_receipt' && !underWarranty) {
         setLimitError('Please confirm if this item is under warranty.');
         return;
       }
-      if (docType === 'purchase_receipt' && underWarranty === 'yes' && !normalizedFields.warrantyUntil) {
+      if (stored === 'purchase_receipt' && underWarranty === 'yes' && !normalizedFields.warrantyUntil) {
         setLimitError('Enter warranty duration to calculate validity date.');
         return;
       }
@@ -305,18 +598,26 @@ export function UploadPage() {
       }
 
       let fileDataUrl: string | undefined;
-      if (file) fileDataUrl = await readFileDataUrl(file);
+      if (file) {
+        fileDataUrl = await readFileDataUrl(file);
+        const payloadCheck = validateDocumentFilePayload(fileDataUrl);
+        if (!payloadCheck.ok) {
+          setLimitError(payloadCheck.message);
+          return;
+        }
+      }
 
       updateDocument(editingDoc.id, {
-        title: title || 'Document',
-        docType,
+        title: sanitizeDocumentTitle(title || 'Document'),
+        docType: stored,
         domain,
         category,
-        memberId: docType === 'purchase_receipt' ? undefined : memberId || undefined,
+        memberId: stored === 'purchase_receipt' ? undefined : memberId || undefined,
         assetId: editAssetId || undefined,
         expiryDate: docExpiry,
         fields: normalizedFields,
-        notes: notes.trim() || undefined,
+        notes: sanitizeDocumentNotes(notes),
+        needsDocTypeSelection: false,
         reviewStatus: 'reviewed',
         verificationStatus: 'verified',
         ...(file
@@ -327,7 +628,7 @@ export function UploadPage() {
           : {}),
       });
 
-      if (needsValidation || isDocumentUnderReview(editingDoc)) {
+      if (needsValidation || isDocumentUnderReview(editingDoc) || isDocumentPendingDetails(editingDoc)) {
         useVaultStore.getState().logActivity('reviewed', {}, editingDoc.id);
       }
 
@@ -336,63 +637,13 @@ export function UploadPage() {
     }
   };
 
-  const handleEditDocTypeChange = (next: DocType) => {
-    setDocType(next);
-    setFields(emptyFieldsFor(next));
-    setExpiryDate('');
-    setDuplicate(null);
-    setCategory(suggestedCategoryForDocType(next));
-    setDomain(
-      suggestedDomainForDocType(next, {
-        memberId,
-        assetId: editAssetId || undefined,
-        uploadContext: isHealth ? 'health' : undefined,
-      }),
-    );
-    if (next === 'purchase_receipt') {
-      setUnderWarranty('');
-      setWarrantyDuration('');
-    } else {
-      setUnderWarranty('');
-    }
-  };
-
-  const replaceDocumentFile = async (picked: File | null) => {
-    setFile(picked);
-    setReplacedFile(Boolean(picked));
-    if (!picked) {
-      setNeedsValidation(false);
-      return;
-    }
-    setOcrLoading(true);
-    setLimitError('');
-    try {
-      const fileDataUrl = picked.type.startsWith('image/') ? await readFileDataUrl(picked) : undefined;
-      const result = await extractOnDevice({ fileName: picked.name, docType, fileDataUrl });
-      const mapped = normalizeDocFields(docType, result.fields);
-      setFields(mapped);
-      if (result.expiryDate) setExpiryDate(result.expiryDate);
-      const docTitle = mapped.productName
-        ? mapped.productName
-        : picked.name.replace(/\.[^.]+$/, '');
-      if (docTitle) setTitle(docTitle);
-      const dup = findDuplicate(
-        documents.filter((d) => d.id !== editId),
-        docType,
-        result.fields,
-      );
-      setDuplicate(dup?.title ?? null);
-      setNeedsValidation(true);
-    } finally {
-      setOcrLoading(false);
-    }
-  };
-
   const showAssetLink =
-    domain === 'assets' || Boolean(editAssetId) || ASSET_DOC_TYPES.includes(docType);
+    domain === 'assets' || Boolean(editAssetId) || ASSET_DOC_TYPES.includes(storageDocType(docType));
 
   const pageTitle = isEdit
-    ? 'Edit document'
+    ? editingDoc && isDocumentPendingDetails(editingDoc)
+      ? 'Add document details'
+      : 'Edit document'
     : isCamera
       ? 'Scan document'
       : isHealth
@@ -461,12 +712,26 @@ export function UploadPage() {
         {limitError && (
           <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{limitError}</p>
         )}
-        {step === 'edit' && file && (
-          <ImageEditor file={file} onDone={handleEditDone} onRetake={handleRetake} />
+        {step === 'edit' && draftFile && (
+          <ImageEditor
+            file={draftFile}
+            pageLabel={
+              editTarget === 'new' && (files.length > 0 || editQueue.length > 0)
+                ? `Page ${files.length + 1}${
+                    editQueue.length > 0 ? ` · ${editQueue.length} more to edit` : ''
+                  }`
+                : undefined
+            }
+            onDone={(f) => void handleEditDone(f, false)}
+            onAddAnother={
+              editTarget === 'new' && !isEdit ? (f) => void handleEditDone(f, true) : undefined
+            }
+            onRetake={handleRetake}
+          />
         )}
         {step === 'pick' && !params.get('verify') && (
           <>
-            {!file ? (
+            {files.length === 0 ? (
               <>
                 {isCamera ? (
                   <label className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-accent/35 bg-accent-soft/50 p-6 text-center text-sm shadow-sm">
@@ -488,10 +753,11 @@ export function UploadPage() {
                       ref={fileInputRef}
                       type="file"
                       accept="image/*,application/pdf"
+                      multiple
                       className="hidden"
                       onChange={handlePickInput}
                     />
-                    Tap to choose photo or PDF
+                    Tap to choose photo(s) or PDF — select multiple for front & back
                   </label>
                 )}
 
@@ -500,7 +766,7 @@ export function UploadPage() {
                     variant="ghost"
                     className="w-full text-xs"
                     onClick={() => {
-                      setFile(null);
+                      setFiles([]);
                       const next = new URLSearchParams(params);
                       next.set('source', 'camera');
                       navigate(`/upload?${next.toString()}`);
@@ -516,6 +782,7 @@ export function UploadPage() {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*,application/pdf"
+                  multiple
                   className="hidden"
                   onChange={handlePickInput}
                 />
@@ -529,19 +796,44 @@ export function UploadPage() {
                 />
                 <button
                   type="button"
-                  onClick={openFilePicker}
+                  onClick={openAddPage}
                   className="surface-panel flex min-h-20 w-full cursor-pointer flex-col items-center justify-center border-2 border-dashed border-border p-4 text-center text-sm"
                 >
-                  <p className="font-medium text-text">{file.name}</p>
-                  <p className="mt-1 text-xs text-muted">Tap to choose a different file</p>
+                  <p className="font-medium text-text">
+                    {files.length === 1 ? '1 page ready' : `${files.length} pages ready`}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {isCamera ? 'Tap to take another photo' : 'Tap to add another page'}
+                  </p>
                 </button>
+
+                <ul className="space-y-1 rounded-xl border border-border-soft bg-surface-elevated p-3 text-xs">
+                  {files.map((f, idx) => (
+                    <li key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate text-muted">
+                        Page {idx + 1}: {f.name}
+                      </span>
+                      <button
+                        type="button"
+                        className="shrink-0 text-danger"
+                        onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+
+                <Button variant="secondary" className="w-full" onClick={openAddPage}>
+                  {isCamera ? '📷 Take another page' : 'Add another page'}
+                </Button>
 
                 {!isCamera && (
                   <Button
                     variant="ghost"
                     className="w-full text-xs"
                     onClick={() => {
-                      setFile(null);
+                      setFiles([]);
                       const next = new URLSearchParams(params);
                       next.set('source', 'camera');
                       navigate(`/upload?${next.toString()}`);
@@ -551,28 +843,61 @@ export function UploadPage() {
                   </Button>
                 )}
 
-            <RadioGroup
-              label="Auto extract data"
-              name="extract"
-              value={extractMode}
-              onChange={setExtractMode}
-              options={[
-                { value: 'on_device', label: 'On-device', hint: 'Private — stays on your phone' },
-                {
-                  value: 'cloud',
-                  label: 'Cloud AI',
-                  hint: 'Sends image for better accuracy',
-                  disabled: !(settings.cloudAiEnabled && user?.plan === 'pro'),
-                },
-              ]}
-            />
+            <p className="text-xs text-muted">
+              {processingEnabled
+                ? 'Each photo is cropped and enhanced before save. Add front & back pages, then upload together — text extraction runs automatically on all pages.'
+                : 'Each photo is cropped and enhanced before save. Add front & back pages, then upload — you will enter document details on the next screen.'}
+            </p>
+
+            <Select
+              label="Document type"
+              value={docType}
+              onChange={(e) => applyDocTypeChange(e.target.value as SelectedDocType)}
+            >
+              {DOC_TYPE_SELECT_OPTIONS.map((t) => (
+                <option key={t.value || 'blank'} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
+
+            {docType === '' && files.some((f) => f.type.startsWith('image/')) && processingEnabled && (
+              <p className="rounded-xl bg-accent-soft/80 px-3 py-2 text-xs text-muted">
+                Choose a document type for better field extraction — we read name, ID number, and
+                dates from the right areas of the card.
+              </p>
+            )}
+
+            {!processingEnabled && (
+              <p className="rounded-xl bg-accent-soft/80 px-3 py-2 text-xs text-muted">
+                Document processing is off in Settings — choose a type, upload, then fill in the
+                fields yourself.
+              </p>
+            )}
+
+            {needsDocTypeSelection && (
+              <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
+                We could not recognize this document. Choose a document type before uploading.
+              </p>
+            )}
 
             <Button
               className="w-full"
-              disabled={!file || !canStage}
+              disabled={
+                files.length === 0 ||
+                !canStage ||
+                needsDocTypeSelection ||
+                (files.some((f) => f.type.startsWith('image/')) && docType === '')
+              }
               onClick={() => void runExtract()}
             >
-              Continue
+              {processingEnabled
+                ? files.length > 1
+                  ? `Upload ${files.length} pages`
+                  : 'Continue'
+                : files.length > 1
+                  ? `Upload ${files.length} pages & enter details`
+                  : 'Upload & enter details'}
             </Button>
               </>
             )}
@@ -581,12 +906,20 @@ export function UploadPage() {
 
         {step === 'verify' && isEdit && editingDoc && (
           <>
+            <DocumentFilePreview
+              fileName={file?.name ?? editingDoc.fileName}
+              fileDataUrl={replacePreviewUrl ?? (file ? undefined : storedFileDataUrl)}
+              additionalFileDataUrls={file ? undefined : storedAdditionalFileDataUrls}
+              loading={file ? !replacePreviewUrl : storedFileLoading}
+              error={storedFileError}
+            />
+
             <label className="surface-panel flex min-h-28 cursor-pointer flex-col items-center justify-center border-2 border-dashed border-accent/35 bg-accent-soft/30 p-4 text-center">
               <input
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={(e) => void replaceDocumentFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => void handleReplacePick(e.target.files?.[0] ?? null)}
               />
               <p className="text-sm font-semibold text-text">Replace document</p>
               <p className="mt-1 text-xs text-muted">
@@ -596,14 +929,22 @@ export function UploadPage() {
                     ? `Current: ${editingDoc.fileName}`
                     : 'Tap to choose a new photo or PDF'}
               </p>
-              <p className="mt-1 text-[0.65rem] text-muted">OCR runs after you pick — review fields before saving</p>
+              <p className="mt-1 text-[0.65rem] text-muted">
+                Images open in the editor first — then we scan and compress automatically
+              </p>
             </label>
 
-            {needsValidation && !ocrLoading && (
+            {(needsValidation || (editingDoc && isDocumentPendingDetails(editingDoc))) && !ocrLoading && (
               <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm">
-                <p className="font-medium text-text">Review scan results</p>
+                <p className="font-medium text-text">
+                  {processingEnabled && !isDocumentPendingDetails(editingDoc)
+                    ? 'Review scan results'
+                    : 'Enter document details'}
+                </p>
                 <p className="mt-1 text-xs text-muted">
-                  Check extracted fields below, update anything incorrect, then validate and save.
+                  {processingEnabled && !isDocumentPendingDetails(editingDoc)
+                    ? 'Check extracted fields below, update anything incorrect, then validate and save.'
+                    : 'Fill in the fields below, then save to add this document to your vault.'}
                 </p>
               </div>
             )}
@@ -614,20 +955,33 @@ export function UploadPage() {
               </p>
             )}
 
+            {needsDocTypeSelection && (
+              <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
+                We could not recognize this document. Choose a document type below, then save.
+              </p>
+            )}
+
             <section className="space-y-3">
               <p className="section-label">Details</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-                <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                <Input
+                  label="Title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value.slice(0, MAX_DOCUMENT_TITLE_CHARS))}
+                  maxLength={MAX_DOCUMENT_TITLE_CHARS}
+                />
                 <Select
                   label="Document type"
                   value={docType}
-                  onChange={(e) => handleEditDocTypeChange(e.target.value as DocType)}
+                  onChange={(e) => applyDocTypeChange(e.target.value as SelectedDocType)}
                 >
-                  {ALL_DOC_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
+                  {DOC_TYPE_SELECT_OPTIONS.map((t) => (
+                    <option key={t.value || 'blank'} value={t.value}>
+                      {t.label}
+                    </option>
                   ))}
                 </Select>
-                {docType !== 'purchase_receipt' && members.length > 0 && (
+                {storageDocType(docType) !== 'purchase_receipt' && members.length > 0 && (
                   <Select label="Family member" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
                     {members.map((m) => (
                       <option key={m.id} value={m.id}>{memberSelectLabel(m)}</option>
@@ -664,7 +1018,7 @@ export function UploadPage() {
                     ))}
                   </Select>
                 )}
-                {!usesFieldBasedExpiry(docType) && (
+                {!usesFieldBasedExpiry(storageDocType(docType)) && (
                   <Input
                     label="Expiry date"
                     type="date"
@@ -716,11 +1070,13 @@ export function UploadPage() {
               </section>
             )}
 
-            {fieldSchemaFor(docType).filter((f) => !(isPurchase && f.key === 'warrantyUntil')).length > 0 && (
+            {fieldSchemaFor(storageDocType(docType)).filter((f) => !(isPurchase && f.key === 'warrantyUntil')).length > 0 && (
               <section className="space-y-3">
-                <p className="section-label">Extracted fields</p>
+                <p className="section-label">
+                  {editingDoc && isDocumentPendingDetails(editingDoc) ? 'Document fields' : 'Extracted fields'}
+                </p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-                  {fieldSchemaFor(docType)
+                  {fieldSchemaFor(storageDocType(docType))
                     .filter((f) => !(isPurchase && f.key === 'warrantyUntil'))
                     .map((f) => (
                       <Input
@@ -729,10 +1085,11 @@ export function UploadPage() {
                         type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
                         value={fields[f.key] ?? ''}
                         onChange={(e) => {
+                          const stored = storageDocType(docType);
                           const next = { ...fields, [f.key]: e.target.value };
                           setFields(next);
-                          if (usesFieldBasedExpiry(docType)) {
-                            const mapped = documentExpiryFromFields(docType, next);
+                          if (usesFieldBasedExpiry(stored)) {
+                            const mapped = documentExpiryFromFields(stored, next);
                             if (mapped) setExpiryDate(mapped);
                           }
                         }}
@@ -750,8 +1107,16 @@ export function UploadPage() {
               members={members}
             />
 
-            <Button className="w-full" disabled={ocrLoading} onClick={() => void save()}>
-              {needsValidation ? 'Validate and save' : 'Save changes'}
+            <Button
+              className="w-full"
+              disabled={ocrLoading || needsDocTypeSelection || docType === ''}
+              onClick={() => void save()}
+            >
+              {editingDoc && isDocumentPendingDetails(editingDoc)
+                ? 'Save document'
+                : needsValidation
+                  ? 'Validate and save'
+                  : 'Save changes'}
             </Button>
             <Button variant="ghost" className="w-full" onClick={() => navigate(backTo)}>
               Cancel
@@ -761,7 +1126,16 @@ export function UploadPage() {
 
       </main>
       <BottomNav />
-      <LoadingOverlay open={ocrLoading || processing} label={ocrLoading ? 'Scanning document…' : 'Processing…'} />
+      <LoadingOverlay
+        open={ocrLoading || processing}
+        label={
+          ocrLoading
+            ? 'Scanning document…'
+            : processing
+              ? 'Preparing and compressing…'
+              : 'Processing…'
+        }
+      />
     </div>
   );
 }

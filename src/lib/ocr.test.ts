@@ -24,12 +24,12 @@ describe('ocr', () => {
         id: '2',
         title: 'PAN',
         docType: 'pan',
-        fields: { panNumber: 'ABCDE1234F', fullName: 'Rahul' },
+        fields: { panNumber: 'ABCPP1234F', fullName: 'Rahul' },
         createdAt: '',
         updatedAt: '',
       },
     ];
-    const dup = findDuplicate(docs, 'pan', { panNumber: 'ABCDE1234F' });
+    const dup = findDuplicate(docs, 'pan', { panNumber: 'ABCPP1234F' });
     expect(dup?.id).toBe('2');
   });
 
@@ -41,10 +41,10 @@ describe('ocr', () => {
         INCOME TAX DEPARTMENT
         Name
         RAHUL SHARMA
-        ABCDE1234F
+        ABCPP1234F
       `,
     });
-    expect(result.fields.panNumber).toBe('ABCDE1234F');
+    expect(result.fields.panNumber).toBe('ABCPP1234F');
     expect(result.fields.fullName).toBe('Rahul Sharma');
     expect(result.confidence).toBeGreaterThan(0.7);
   });

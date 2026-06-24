@@ -20,7 +20,6 @@ function pushRecent(scope: string, message: string, detail?: unknown): void {
 }
 
 function enabled(): boolean {
-  if (import.meta.env.DEV) return true;
   try {
     return localStorage.getItem('PREVAULT_DEBUG') === '1';
   } catch {

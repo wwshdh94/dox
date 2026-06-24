@@ -16,10 +16,10 @@ export type ImageEditSettings = {
 };
 
 export const DEFAULT_CORNERS: QuadCorners = {
-  tl: { x: 0.06, y: 0.06 },
-  tr: { x: 0.94, y: 0.06 },
-  br: { x: 0.94, y: 0.94 },
-  bl: { x: 0.06, y: 0.94 },
+  tl: { x: 0, y: 0 },
+  tr: { x: 1, y: 0 },
+  br: { x: 1, y: 1 },
+  bl: { x: 0, y: 1 },
 };
 
 export const DEFAULT_IMAGE_EDIT_SETTINGS: ImageEditSettings = {
@@ -38,16 +38,18 @@ export function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
+    img.onload = () => resolve(img);
     img.onerror = () => {
       URL.revokeObjectURL(url);
       reject(new Error('Could not load image'));
     };
     img.src = url;
   });
+}
+
+/** Revoke blob URL created by loadImageFromFile when the image is no longer needed. */
+export function releaseLoadedImage(image: HTMLImageElement): void {
+  if (image.src.startsWith('blob:')) URL.revokeObjectURL(image.src);
 }
 
 function dist(a: Point, b: Point): number {
@@ -294,7 +296,7 @@ export type CornerKey = keyof QuadCorners;
 
 export function clampCorner(point: Point): Point {
   return {
-    x: Math.max(0.02, Math.min(0.98, point.x)),
-    y: Math.max(0.02, Math.min(0.98, point.y)),
+    x: Math.max(0, Math.min(1, point.x)),
+    y: Math.max(0, Math.min(1, point.y)),
   };
 }

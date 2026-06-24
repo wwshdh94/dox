@@ -15,7 +15,7 @@ describe('imageEdit', () => {
   });
 
   it('clamps corner drag to image bounds', () => {
-    expect(clampCorner({ x: -1, y: 2 })).toEqual({ x: 0.02, y: 0.98 });
+    expect(clampCorner({ x: -1, y: 2 })).toEqual({ x: 0, y: 1 });
   });
 
   it('computes output size from corner quad', () => {

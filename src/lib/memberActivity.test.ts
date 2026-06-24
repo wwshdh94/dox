@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { memberHasJoined, memberLastActiveLabel, memberStatusLabel } from '@/lib/memberActivity';
+import {
+  memberHasJoined,
+  memberLastActiveLabel,
+  memberStatusLabel,
+  resolveMemberStatusLight,
+} from '@/lib/memberActivity';
 import type { FamilyMember } from '@/types';
 
 const base: FamilyMember = {
@@ -22,5 +27,14 @@ describe('memberActivity', () => {
       'Active',
     );
     expect(memberLastActiveLabel({ ...base, joinedAt: '2025-06-01T00:00:00.000Z' })).toBe('Active');
+  });
+
+  it('resolveMemberStatusLight maps member state to dot styles', () => {
+    expect(resolveMemberStatusLight({ ...base, status: 'disabled' }).label).toBe('Disabled');
+    expect(resolveMemberStatusLight({ ...base, joinedAt: '2025-06-01T00:00:00.000Z' }).dot).toContain(
+      'emerald',
+    );
+    expect(resolveMemberStatusLight(base).pulse).toBe(true);
+    expect(resolveMemberStatusLight(base).label).toBe('Invite pending');
   });
 });

@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/Card';
-import { ExpiryChip } from '@/components/ExpiryChip';
+import { AssetCard } from '@/components/AssetCard';
 import { Header } from '@/components/Header';
 import { BottomNav } from '@/components/BottomNav';
 import { HomeFab } from '@/components/HomeFab';
@@ -49,56 +48,79 @@ export function AssetsPage() {
         {vehicles.length > 0 && (
           <section className="space-y-3">
             <p className="section-label">Vehicles</p>
-            {vehicles.map((a) => {
-              const docs = documents.filter((d) => !d.archivedAt && d.assetId === a.id && isAssetsDomainDoc(d));
-              const { valid, total } = vehicleValidity(docs);
-              return (
-                <Card key={a.id} onClick={() => navigate(`/assets/${a.id}`)}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold tracking-tight">{a.label}</p>
-                      <p className="text-xs text-muted">{valid} of {total} valid</p>
-                    </div>
-                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm ${valid === total ? 'bg-success/12 text-success' : 'bg-warning/12 text-warning'}`}>
-                      {valid === total ? '✓' : '!'}
-                    </span>
-                  </div>
-                </Card>
-              );
-            })}
+            <div className="grid grid-cols-2 gap-3">
+              {vehicles.map((a) => {
+                const docs = documents.filter((d) => !d.archivedAt && d.assetId === a.id && isAssetsDomainDoc(d));
+                const { valid, total } = vehicleValidity(docs);
+                const allValid = valid === total;
+                return (
+                  <AssetCard
+                    key={a.id}
+                    asset={a}
+                    title={a.label}
+                    subtitle={`${valid} of ${total} docs valid`}
+                    status={{
+                      label: allValid ? 'All valid' : 'Needs attention',
+                      tone: allValid ? 'success' : 'warning',
+                    }}
+                    onClick={() => navigate(`/assets/${a.id}`)}
+                  />
+                );
+              })}
+            </div>
           </section>
         )}
 
         {purchases.length > 0 && (
           <section className="space-y-3">
             <p className="section-label">Purchases</p>
-            {purchases.map((a) => {
-              const pf = a.purchaseFields;
-              const owner = members.find((m) => m.id === a.ownedByMemberId);
-              return (
-                <Card key={a.id} onClick={() => navigate(`/assets/${a.id}`)}>
-                  <p className="font-semibold tracking-tight">{pf?.productName ?? a.label}</p>
-                  {pf && (
-                    <p className="text-sm text-accent-ink">{formatINR(pf.amount)}</p>
-                  )}
-                  <p className="text-xs text-muted">{pf?.storeName}{owner ? ` · ${owner.displayName}` : ''}</p>
-                  {pf?.warrantyUntil && (
-                    <div className="mt-2">
-                      <ExpiryChip date={pf.warrantyUntil} />
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
+            <div className="grid grid-cols-2 gap-3">
+              {purchases.map((a) => {
+                const pf = a.purchaseFields;
+                const ownerMember = members.find((m) => m.id === a.ownedByMemberId);
+                const subtitle = [
+                  pf ? formatINR(pf.amount) : null,
+                  pf?.storeName,
+                  ownerMember?.displayName,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <AssetCard
+                    key={a.id}
+                    asset={a}
+                    title={pf?.productName ?? a.label}
+                    subtitle={subtitle || undefined}
+                    expiryDate={pf?.warrantyUntil}
+                    onClick={() => navigate(`/assets/${a.id}`)}
+                  />
+                );
+              })}
+            </div>
           </section>
         )}
 
-        {other.map((a) => (
-          <Card key={a.id} onClick={() => navigate(`/assets/${a.id}`)}>
-            <p className="font-medium">{a.label}</p>
-          </Card>
-        ))}
+        {other.length > 0 && (
+          <section className="space-y-3">
+            <p className="section-label">Other assets</p>
+            <div className="grid grid-cols-2 gap-3">
+              {other.map((a) => (
+                <AssetCard
+                  key={a.id}
+                  asset={a}
+                  title={a.label}
+                  onClick={() => navigate(`/assets/${a.id}`)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
+        {assets.length === 0 && (
+          <p className="text-center text-sm text-muted">
+            No assets yet. Tap + to add a vehicle, appliance, or purchase receipt.
+          </p>
+        )}
       </main>
       <BottomNav />
       <HomeFab context="assets" />

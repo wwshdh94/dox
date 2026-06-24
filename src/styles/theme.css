@@ -135,7 +135,33 @@ a {
   @apply text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted;
 }
 
-.plan-badge {
+.profile-hero {
+  position: relative;
+  border-radius: var(--radius-xl);
+}
+
+.profile-hero-accent {
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--brand-navy) 0%,
+    color-mix(in srgb, var(--gold-border) 70%, var(--brand-navy)) 55%,
+    var(--gold-border) 100%
+  );
+}
+
+.plan-pro-card {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--gold) 10%, var(--surface-elevated)) 0%,
+    var(--surface-elevated) 55%
+  );
+}
+
+.plan-hero {
+  border-radius: var(--radius-xl);
+}
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -189,6 +215,44 @@ a {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
 }
+
+/* Family tree — colours relative to owner (green = owner generation) */
+.family-gen-card {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 2px solid transparent;
+}
+
+.family-gen-card--ancestor-2 {
+  background: color-mix(in srgb, var(--gold) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--gold) 42%, var(--border-soft));
+}
+
+.family-gen-card--ancestor-1 {
+  background: color-mix(in srgb, var(--brand-navy) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand-navy) 28%, var(--border-soft));
+}
+
+.family-gen-card--owner {
+  background: color-mix(in srgb, var(--success) 11%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border-soft));
+}
+
+.family-gen-card--descendant-1 {
+  background: color-mix(in srgb, var(--accent-muted) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent-muted) 55%, var(--border-soft));
+}
+
+.family-gen-card--descendant-2 {
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--border-soft));
+}
+
+.family-gen-connector--ancestor-2 { background: color-mix(in srgb, var(--gold) 45%, var(--border-soft)); }
+.family-gen-connector--ancestor-1 { background: color-mix(in srgb, var(--brand-navy) 35%, var(--border-soft)); }
+.family-gen-connector--owner { background: color-mix(in srgb, var(--success) 40%, var(--border-soft)); }
+.family-gen-connector--descendant-1 { background: color-mix(in srgb, var(--accent-muted) 55%, var(--border-soft)); }
+.family-gen-connector--descendant-2 { background: color-mix(in srgb, var(--warning) 42%, var(--border-soft)); }
 
 .nav-pill-active {
   background: var(--accent-soft);
@@ -587,5 +651,294 @@ input[type='date']::-webkit-date-and-time-value {
     break-inside: avoid;
     page-break-inside: avoid;
     margin-bottom: 1rem;
+  }
+}
+
+/* Welcome flow — cloud vault hero motion */
+.cloud-vault-hero {
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+
+@keyframes cv-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes cv-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cv-beam-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes cv-particle-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate(4px, -6px);
+    opacity: 1;
+  }
+}
+
+@keyframes cv-lock-glow {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.cloud-vault-hero .cv-cloud-main {
+  animation: cv-float 4.5s ease-in-out infinite;
+  transform-origin: 180px 118px;
+}
+
+.cloud-vault-hero .cv-cloud-back {
+  animation: cv-float 5.5s ease-in-out infinite reverse;
+  opacity: 0.6;
+}
+
+.cloud-vault-hero .cv-orbit-1 {
+  transform-origin: 180px 130px;
+  animation: cv-orbit-spin 28s linear infinite;
+}
+
+.cloud-vault-hero .cv-orbit-2 {
+  transform-origin: 180px 130px;
+  animation: cv-orbit-spin 18s linear infinite reverse;
+}
+
+.cloud-vault-hero .cv-doc-1 {
+  animation: cv-float 3.8s ease-in-out infinite;
+}
+
+.cloud-vault-hero .cv-doc-2 {
+  animation: cv-float 4.2s ease-in-out 0.6s infinite;
+}
+
+.cloud-vault-hero .cv-beam {
+  animation: cv-beam-pulse 2.4s ease-in-out infinite;
+}
+
+.cloud-vault-hero .cv-pulse-dot {
+  animation: cv-beam-pulse 1.6s ease-in-out infinite;
+}
+
+.cloud-vault-hero .cv-lock-body,
+.cloud-vault-hero .cv-lock-shackle {
+  animation: cv-lock-glow 2s ease-in-out infinite;
+}
+
+.cloud-vault-hero .cv-particle-1 {
+  animation: cv-particle-drift 3s ease-in-out infinite;
+}
+.cloud-vault-hero .cv-particle-2 {
+  animation: cv-particle-drift 3.4s ease-in-out 0.4s infinite;
+}
+.cloud-vault-hero .cv-particle-3 {
+  animation: cv-particle-drift 2.8s ease-in-out 0.8s infinite;
+}
+.cloud-vault-hero .cv-particle-4 {
+  animation: cv-particle-drift 3.2s ease-in-out 1.2s infinite;
+}
+.cloud-vault-hero .cv-particle-5 {
+  animation: cv-particle-drift 2.6s ease-in-out 0.2s infinite;
+}
+
+.welcome-mock-phone {
+  animation: cv-float 5s ease-in-out infinite;
+}
+
+/* Welcome step transitions */
+@keyframes welcome-slide-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes welcome-title-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes welcome-scan {
+  0% {
+    top: 28%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 72%;
+    opacity: 0;
+  }
+}
+
+@keyframes welcome-card-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes welcome-pulse-badge {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+
+@keyframes welcome-banner-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(135 99 8 / 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(135 99 8 / 0);
+  }
+}
+
+@keyframes welcome-tile-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.welcome-visual-enter {
+  animation: welcome-slide-in 0.45s ease-out both;
+}
+
+.welcome-title-enter {
+  animation: welcome-title-in 0.35s ease-out both;
+}
+
+.welcome-anim-upload {
+  position: relative;
+}
+
+.welcome-anim-upload .welcome-scan-line {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  animation: welcome-scan 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.welcome-anim-family .welcome-family-card {
+  animation: welcome-card-in 0.5s ease-out both;
+}
+
+.welcome-anim-family .welcome-share-pulse {
+  animation: welcome-pulse-badge 2s ease-in-out infinite;
+}
+
+.welcome-anim-expiry .welcome-expiry-banner {
+  animation: welcome-banner-pulse 2.4s ease-in-out infinite;
+}
+
+.welcome-anim-expiry .welcome-expiry-urgent {
+  animation: welcome-pulse-badge 1.4s ease-in-out infinite;
+}
+
+.welcome-anim-security .welcome-security-tile {
+  animation: welcome-tile-pop 0.45s ease-out both;
+}
+
+.welcome-swipe-area {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.welcome-swipe-area:active {
+  cursor: grabbing;
+}
+
+@keyframes welcome-hint-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateX(6px);
+    opacity: 1;
+  }
+}
+
+.welcome-swipe-hint {
+  animation: welcome-hint-nudge 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud-vault-hero *,
+  .welcome-mock-phone,
+  .welcome-visual-enter,
+  .welcome-title-enter,
+  .welcome-anim-upload .welcome-scan-line,
+  .welcome-anim-family .welcome-family-card,
+  .welcome-anim-family .welcome-share-pulse,
+  .welcome-anim-expiry .welcome-expiry-banner,
+  .welcome-anim-expiry .welcome-expiry-urgent,
+  .welcome-anim-security .welcome-security-tile {
+    animation: none !important;
+  }
+  .welcome-swipe-hint {
+    animation: none !important;
   }
 }

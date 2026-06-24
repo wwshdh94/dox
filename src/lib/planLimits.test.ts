@@ -42,10 +42,14 @@ const member = (id: string, name: string): FamilyMember => ({
 });
 
 describe('planLimits', () => {
-  it('treats pro and family as paid', () => {
+  it('treats pro, family, lifetime, and launch cohort as paid', () => {
     expect(isProUser({ ...freeUser, plan: 'pro' })).toBe(true);
     expect(isProUser({ ...freeUser, plan: 'family' })).toBe(true);
+    expect(isProUser({ ...freeUser, lifetimePro: true })).toBe(true);
     expect(isProUser(freeUser)).toBe(false);
+    expect(isProUser({ ...freeUser, launchCohort: true })).toBe(
+      import.meta.env.VITE_LAUNCH_COHORT_PRO === 'true',
+    );
   });
 
   it('limits free tier to 10 documents via referrals', () => {

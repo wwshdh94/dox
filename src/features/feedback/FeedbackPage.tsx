@@ -8,9 +8,13 @@ import {
   listFeedbackForUser,
   markFeedbackRepliesRead,
   submitFeedback,
+  MIN_QUALITY_FEEDBACK_CHARS,
+  isQualityFeedbackMessage,
   type FeedbackCategory,
   type FeedbackItem,
 } from '@/lib/feedback';
+import { MAX_FEEDBACK_MESSAGE_CHARS } from '@/lib/inputLimits';
+import { canAccessLifetimeProProgram } from '@/lib/launchTasks';
 import { notifyNewFeedback } from '@/lib/feedbackNotify';
 import { useVaultStore } from '@/store/useVaultStore';
 
@@ -81,6 +85,15 @@ export function FeedbackPage() {
             Report bugs, request features, or ask for help. Our team replies here — only you can see
             your thread.
           </p>
+          {canAccessLifetimeProProgram(user) && (
+            <p className="mt-2 text-xs text-muted">
+              Launch members: thoughtful feedback ({MIN_QUALITY_FEEDBACK_CHARS}+ characters) can count
+              toward Lifetime Pro after admin approval.{' '}
+              {isQualityFeedbackMessage(message)
+                ? 'This draft qualifies on length.'
+                : 'Add detail so we can act on it.'}
+            </p>
+          )}
         </div>
 
         <section className="surface-panel space-y-3 p-4">
@@ -98,11 +111,15 @@ export function FeedbackPage() {
           </select>
           <textarea
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => setMessage(e.target.value.slice(0, MAX_FEEDBACK_MESSAGE_CHARS))}
+            maxLength={MAX_FEEDBACK_MESSAGE_CHARS}
             rows={4}
             placeholder="Describe the issue or suggestion…"
             className="w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft"
           />
+          <p className="text-[0.65rem] text-muted">
+            {message.length}/{MAX_FEEDBACK_MESSAGE_CHARS} characters
+          </p>
           <Button className="w-full" onClick={handleSubmit} disabled={!message.trim()}>
             {sent ? 'Sent — thank you!' : 'Send feedback'}
           </Button>

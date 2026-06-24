@@ -1,13 +1,27 @@
 import type { Document, DocType } from '@/types';
+import { aadhaarQrToFields, scanAadhaarQrFromDataUrl } from '@/lib/aadhaarQr';
 import { emptyFieldsFor, extractExpiryDate, normalizeDocFields } from '@/lib/docFields';
-import { parseAadhaarFromText, parsePanFromText } from '@/lib/idDocParser';
+import {
+  parseDocFieldsForType,
+  parseAadhaarFromText,
+} from '@/lib/idDocParser';
+import { extractCloudOcr } from '@/lib/ocrCloud';
 import { recognizeImageText } from '@/lib/ocrImage';
+import {
+  chooseInitialExtractMode,
+  isImageDataUrl,
+  shouldEscalateToCloud,
+  shouldExtractFromUpload,
+} from '@/lib/ocrRoute';
+import { isOcrRecognitionSuccessful } from '@/lib/ocrRecognition';
+import { shouldSkipCloudOcr } from '@/lib/ocrSkip';
 
 export interface OcrResult {
   rawText: string;
   confidence: number;
   fields: Record<string, string | number>;
   expiryDate?: string;
+  source?: 'on_device' | 'cloud';
 }
 
 export interface ExtractOnDeviceOptions {
@@ -17,6 +31,154 @@ export interface ExtractOnDeviceOptions {
   fileDataUrl?: string;
   /** Skip Tesseract — parse supplied OCR text (tests / replay) */
   ocrText?: string;
+  /** Multi-page index (Aadhaar front=0, back=1). */
+  pageIndex?: number;
+}
+
+export type ExtractMode = 'on_device' | 'cloud';
+
+export interface ExtractDocumentOptions extends ExtractOnDeviceOptions {
+  mode?: ExtractMode;
+}
+
+const ID_DOC_TYPES = new Set<DocType>([
+  'pan',
+  'aadhaar',
+  'passport',
+  'driving_license',
+  'voter_id',
+]);
+
+function buildIdDocOcrResult(
+  docType: DocType,
+  rawText: string,
+  ocrConfidence: number,
+  opts?: {
+    cloudFields?: Record<string, string>;
+    regions?: Record<string, string>;
+    pageIndex?: number;
+  },
+): OcrResult | null {
+  if (!ID_DOC_TYPES.has(docType)) return null;
+
+  const parsed = parseDocFieldsForType(docType, {
+    rawText,
+    regions: opts?.regions,
+    pageIndex: opts?.pageIndex ?? 0,
+  });
+  if (!parsed) return null;
+
+  const raw: Record<string, string | number> = {
+    ...emptyFieldsFor(docType),
+    ...(opts?.cloudFields ?? {}),
+  };
+
+  if (docType === 'pan' && 'panNumber' in parsed) {
+    raw.panNumber = parsed.panNumber;
+    if (parsed.fullName) raw.fullName = parsed.fullName;
+    if (parsed.fathersName) raw.fathersName = parsed.fathersName;
+    if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
+  } else if (docType === 'aadhaar' && 'aadhaarNumber' in parsed) {
+    raw.aadhaarNumber = parsed.aadhaarNumber;
+    if (parsed.fullName) raw.fullName = parsed.fullName;
+    if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
+    if (parsed.fathersName) raw.fathersName = parsed.fathersName;
+  } else if (docType === 'passport' && 'passportNumber' in parsed) {
+    raw.passportNumber = parsed.passportNumber;
+    if (parsed.fullName) raw.fullName = parsed.fullName;
+    if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
+    if (parsed.expiryDate) raw.expiryDate = parsed.expiryDate;
+    if (parsed.dateOfIssue) raw.dateOfIssue = parsed.dateOfIssue;
+  } else if (docType === 'driving_license' && 'licenseNumber' in parsed) {
+    raw.licenseNumber = parsed.licenseNumber;
+    if (parsed.fullName) raw.fullName = parsed.fullName;
+    if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
+    if (parsed.expiryDate) raw.expiryDate = parsed.expiryDate;
+  } else if (docType === 'voter_id' && 'voterIdNumber' in parsed) {
+    raw.voterIdNumber = parsed.voterIdNumber;
+    if (parsed.fullName) raw.fullName = parsed.fullName;
+    if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
+  }
+
+  const fields = normalizeDocFields(docType, raw);
+  const filled = Object.values(fields).filter((v) => v !== '').length;
+  if (filled === 0) return null;
+
+  return {
+    rawText: rawText || `Parsed ${docType}`,
+    confidence: Math.max(parsed.confidence, ocrConfidence, filled > 1 ? 0.75 : 0.45),
+    fields,
+    expiryDate: extractExpiryDate(docType, raw),
+  };
+}
+
+function applyIdDocParse(
+  docType: DocType,
+  rawText: string,
+  ocrConfidence: number,
+  cloudFields?: Record<string, string>,
+  regions?: Record<string, string>,
+  pageIndex?: number,
+): OcrResult | null {
+  const idResult = buildIdDocOcrResult(docType, rawText, ocrConfidence, {
+    cloudFields,
+    regions,
+    pageIndex,
+  });
+  if (idResult) return idResult;
+
+  if (cloudFields && Object.keys(cloudFields).length > 0) {
+    const raw: Record<string, string | number> = { ...emptyFieldsFor(docType), ...cloudFields };
+    const fields = normalizeDocFields(docType, raw);
+    const filled = Object.values(fields).filter((v) => v !== '').length;
+    if (filled > 0) {
+      return {
+        rawText: rawText || `Cloud ${docType}`,
+        confidence: Math.max(ocrConfidence, 0.85),
+        fields,
+        expiryDate: extractExpiryDate(docType, raw),
+      };
+    }
+  }
+
+  return null;
+}
+
+export async function extractDocument(opts: ExtractDocumentOptions): Promise<OcrResult> {
+  const mode = opts.mode ?? 'on_device';
+
+  if (mode === 'cloud' && opts.fileDataUrl?.startsWith('data:image/') && !opts.ocrText) {
+    try {
+      const cloud = await extractCloudOcr({
+        docType: opts.docType,
+        fileName: opts.fileName,
+        fileDataUrl: opts.fileDataUrl,
+      });
+      const parsed = applyIdDocParse(
+        opts.docType,
+        cloud.ocrText,
+        cloud.confidence,
+        cloud.fields,
+        undefined,
+        opts.pageIndex,
+      );
+      if (parsed) {
+        return { ...parsed, source: 'cloud' };
+      }
+      if (cloud.ocrText) {
+        const fallback = await extractOnDevice({
+          ...opts,
+          ocrText: cloud.ocrText,
+        });
+        return { ...fallback, confidence: Math.max(fallback.confidence, cloud.confidence), source: 'cloud' };
+      }
+    } catch {
+      /* fall through to on-device */
+    }
+  }
+
+  const onDevice = await extractOnDevice(opts);
+  return { ...onDevice, source: 'on_device' };
 }
 
 /** Mock on-device OCR — Tesseract for images; regex heuristics as fallback */
@@ -30,56 +192,65 @@ export async function extractOnDevice(
       : fileNameOrOptions;
 
   const { fileName, docType } = opts;
+  const pageIndex = opts.pageIndex ?? 0;
   let rawText = '';
   let ocrConfidence = 0;
+  let ocrRegions: Record<string, string> | undefined;
 
   if (opts.ocrText) {
     rawText = opts.ocrText;
     ocrConfidence = 0.7;
   } else if (opts.fileDataUrl?.startsWith('data:image/')) {
     try {
-      const recognized = await recognizeImageText(opts.fileDataUrl);
+      const recognized = await recognizeImageText(opts.fileDataUrl, {
+        docType,
+        pageIndex,
+      });
       rawText = recognized.text;
       ocrConfidence = recognized.confidence;
+      ocrRegions = recognized.regions;
     } catch {
       rawText = '';
       ocrConfidence = 0;
     }
   }
 
-  if (docType === 'pan') {
-    const parsed = parsePanFromText(rawText);
-    if (parsed) {
-      const raw: Record<string, string | number> = { ...emptyFieldsFor(docType) };
-      raw.panNumber = parsed.panNumber;
-      if (parsed.fullName) raw.fullName = parsed.fullName;
+  // Aadhaar Secure QR — try before OCR text parsing (image uploads only)
+  if (
+    docType === 'aadhaar' &&
+    opts.fileDataUrl?.startsWith('data:image/') &&
+    !opts.ocrText
+  ) {
+    const qr = await scanAadhaarQrFromDataUrl(opts.fileDataUrl);
+    if (qr) {
+      const ocrParsed = rawText ? parseAadhaarFromText(rawText) : null;
+      const raw: Record<string, string | number> = {
+        ...emptyFieldsFor(docType),
+        ...aadhaarQrToFields(qr),
+      };
+      if (ocrParsed?.aadhaarNumber) raw.aadhaarNumber = ocrParsed.aadhaarNumber;
+      if (!raw.fullName && ocrParsed?.fullName) raw.fullName = ocrParsed.fullName;
+      if (!raw.dateOfBirth && ocrParsed?.dateOfBirth) raw.dateOfBirth = ocrParsed.dateOfBirth;
+      if (!raw.fathersName && ocrParsed?.fathersName) raw.fathersName = ocrParsed.fathersName;
+
       const fields = normalizeDocFields(docType, raw);
       const filled = Object.values(fields).filter((v) => v !== '').length;
-      return {
-        rawText: rawText || 'Parsed pan',
-        confidence: Math.max(parsed.confidence, ocrConfidence, filled > 1 ? 0.75 : 0.45),
-        fields,
-        expiryDate: extractExpiryDate(docType, raw),
-      };
-    }
-  } else if (docType === 'aadhaar') {
-    const parsed = parseAadhaarFromText(rawText);
-    if (parsed) {
-      const raw: Record<string, string | number> = { ...emptyFieldsFor(docType) };
-      raw.aadhaarNumber = parsed.aadhaarNumber;
-      if (parsed.fullName) raw.fullName = parsed.fullName;
-      if (parsed.dateOfBirth) raw.dateOfBirth = parsed.dateOfBirth;
-      if (parsed.fathersName) raw.fathersName = parsed.fathersName;
-      const fields = normalizeDocFields(docType, raw);
-      const filled = Object.values(fields).filter((v) => v !== '').length;
-      return {
-        rawText: rawText || 'Parsed aadhaar',
-        confidence: Math.max(parsed.confidence, ocrConfidence, filled > 1 ? 0.75 : 0.45),
-        fields,
-        expiryDate: extractExpiryDate(docType, raw),
-      };
+      if (filled > 0) {
+        return {
+          rawText: rawText || 'Aadhaar Secure QR',
+          confidence: Math.max(qr.confidence, ocrConfidence, filled > 2 ? 0.92 : 0.85),
+          fields,
+          expiryDate: extractExpiryDate(docType, raw),
+        };
+      }
     }
   }
+
+  const idParsed = buildIdDocOcrResult(docType, rawText, ocrConfidence, {
+    regions: ocrRegions,
+    pageIndex,
+  });
+  if (idParsed) return idParsed;
 
   // Filename / demo fallback for other types and when OCR misses
   await new Promise((r) => setTimeout(r, rawText ? 80 : 400));
@@ -203,6 +374,152 @@ function monthsAhead(n: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + n);
   return d.toISOString().slice(0, 10);
+}
+
+function mergeOcrFieldMaps(
+  a: Record<string, string | number>,
+  b: Record<string, string | number>,
+): Record<string, string | number> {
+  const out = { ...a };
+  for (const [key, value] of Object.entries(b)) {
+    if (value !== '' && value != null && (out[key] === '' || out[key] == null)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** Run OCR on each page and merge fields (e.g. Aadhaar front + back). */
+export async function extractDocumentFromPages(
+  opts: ExtractDocumentOptions & { additionalFileDataUrls?: string[] },
+): Promise<OcrResult> {
+  const pages = [opts.fileDataUrl, ...(opts.additionalFileDataUrls ?? [])].filter(
+    (url): url is string => Boolean(url),
+  );
+  if (pages.length <= 1) return extractDocument(opts);
+
+  let merged: OcrResult | null = null;
+  for (let i = 0; i < pages.length; i++) {
+    const result = await extractDocument({
+      ...opts,
+      fileDataUrl: pages[i],
+      fileName: i === 0 ? opts.fileName : `${opts.fileName}-page-${i + 1}`,
+      pageIndex: i,
+    });
+    if (!merged) {
+      merged = result;
+      continue;
+    }
+    merged = {
+      ...merged,
+      rawText: `${merged.rawText}\n---\n${result.rawText}`,
+      confidence: Math.max(merged.confidence, result.confidence),
+      fields: normalizeDocFields(
+        opts.docType,
+        mergeOcrFieldMaps(merged.fields, result.fields),
+      ),
+      expiryDate: merged.expiryDate ?? result.expiryDate,
+      source: merged.source ?? result.source,
+    };
+  }
+  return merged!;
+}
+
+export interface ExtractAutoOptions extends ExtractOnDeviceOptions {
+  additionalFileDataUrls?: string[];
+  cloudAllowed: boolean;
+}
+
+function countFilledFields(fields: Record<string, string | number>): number {
+  return Object.values(fields).filter((v) => v !== '' && v != null).length;
+}
+
+/** On-device first; escalate to cloud when allowed and confidence is low. */
+export async function extractDocumentAuto(opts: ExtractAutoOptions): Promise<OcrResult> {
+  const hasImage =
+    isImageDataUrl(opts.fileDataUrl) ||
+    (opts.additionalFileDataUrls ?? []).some((url) => isImageDataUrl(url));
+
+  if (!shouldExtractFromUpload(opts) && !hasImage) {
+    return {
+      rawText: '',
+      confidence: 0,
+      fields: emptyFieldsFor(opts.docType),
+      source: 'on_device',
+    };
+  }
+
+  const initialMode = chooseInitialExtractMode({
+    docType: opts.docType,
+    cloudAllowed: opts.cloudAllowed,
+    hasImage,
+  });
+
+  let result = await extractDocument({ ...opts, mode: initialMode });
+
+  if (shouldSkipCloudOcr(result.rawText) && !isOcrRecognitionSuccessful(result)) {
+    return {
+      rawText: '',
+      confidence: 0,
+      fields: emptyFieldsFor(opts.docType),
+      source: 'on_device',
+    };
+  }
+
+  const filled = countFilledFields(result.fields);
+
+  if (
+    shouldEscalateToCloud({
+      docType: opts.docType,
+      confidence: result.confidence,
+      filledFields: filled,
+      cloudAllowed: opts.cloudAllowed,
+      alreadyCloud: result.source === 'cloud',
+    }) &&
+    !shouldSkipCloudOcr(result.rawText)
+  ) {
+    const cloudResult = await extractDocument({ ...opts, mode: 'cloud' });
+    const cloudFilled = countFilledFields(cloudResult.fields);
+    if (cloudResult.confidence > result.confidence || cloudFilled > filled) {
+      result = cloudResult;
+    }
+  }
+
+  return result;
+}
+
+/** Multi-page auto extraction (e.g. Aadhaar front + back). */
+export async function extractDocumentFromPagesAuto(opts: ExtractAutoOptions): Promise<OcrResult> {
+  const pages = [opts.fileDataUrl, ...(opts.additionalFileDataUrls ?? [])].filter(
+    (url): url is string => Boolean(url),
+  );
+  if (pages.length <= 1) return extractDocumentAuto(opts);
+
+  let merged: OcrResult | null = null;
+  for (let i = 0; i < pages.length; i++) {
+    const result = await extractDocumentAuto({
+      ...opts,
+      fileDataUrl: pages[i],
+      additionalFileDataUrls: undefined,
+      fileName: i === 0 ? opts.fileName : `${opts.fileName}-page-${i + 1}`,
+    });
+    if (!merged) {
+      merged = result;
+      continue;
+    }
+    merged = {
+      ...merged,
+      rawText: `${merged.rawText}\n---\n${result.rawText}`,
+      confidence: Math.max(merged.confidence, result.confidence),
+      fields: normalizeDocFields(
+        opts.docType,
+        mergeOcrFieldMaps(merged.fields, result.fields),
+      ),
+      expiryDate: merged.expiryDate ?? result.expiryDate,
+      source: merged.source === 'cloud' || result.source === 'cloud' ? 'cloud' : 'on_device',
+    };
+  }
+  return merged!;
 }
 
 export function findDuplicate(

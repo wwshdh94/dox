@@ -4,6 +4,7 @@ import {
   getDocumentsNeedingReview,
   normalizeReviewStatus,
   REVIEW_STATUS_LABELS,
+  reviewStatusActionHint,
 } from '@/lib/documentReview';
 import { countUnreadFeedbackReplies, listFeedbackForUser, markFeedbackReplyRead } from '@/lib/feedback';
 import { getOwnerMember } from '@/lib/family';
@@ -95,10 +96,10 @@ export function buildVaultAlertNotifications(ctx: VaultInboxContext): InboxNotif
       id: `review-${doc.id}`,
       type: 'document_review',
       title: `${docLabel(doc)} — ${REVIEW_STATUS_LABELS[status]}`,
-      body: 'Open the document and mark it reviewed after checking extracted details.',
+      body: reviewStatusActionHint(status) || 'Open the document to continue.',
       at: doc.updatedAt || doc.createdAt,
       unread: true,
-      href: `/documents/${doc.id}`,
+      href: status === 'pending_details' ? `/upload?edit=${doc.id}` : `/documents/${doc.id}`,
       sourceId: doc.id,
     });
   }

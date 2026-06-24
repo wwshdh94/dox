@@ -14,7 +14,7 @@ describe('uploadNavigation', () => {
   it('derives initial doc type from upload params', () => {
     expect(initialDocTypeFromUploadParams(new URLSearchParams('type=purchase'))).toBe('purchase_receipt');
     expect(initialDocTypeFromUploadParams(new URLSearchParams('context=health'))).toBe('health_insurance');
-    expect(initialDocTypeFromUploadParams(new URLSearchParams(''))).toBe('passport');
+    expect(initialDocTypeFromUploadParams(new URLSearchParams(''))).toBe('');
   });
 
   it('derives initial member from query or owner fallback', () => {

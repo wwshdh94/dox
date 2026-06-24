@@ -11,9 +11,11 @@ import type {
   User,
   VisitingCard,
 } from '@/types';
+import { getUserContentKey } from '@/lib/householdCrypto';
 
 export const BACKUP_FILE_EXT = '.prevaultbackup';
-export const BACKUP_VERSION = 1;
+/** v2 — encrypted with account key (Google user id + pepper). v1 used user passphrase. */
+export const BACKUP_VERSION = 2;
 
 export interface VaultExportPayload {
   user: User | null;
@@ -35,6 +37,8 @@ export interface EncryptedVaultBackup {
   version: number;
   app: BackupAppId;
   createdAt: string;
+  /** Google auth user id — backups restore only on the same account. */
+  ownerId?: string;
   salt: string;
   iv: string;
   ciphertext: string;
@@ -54,7 +58,7 @@ function fromB64(str: string): Uint8Array {
   return out;
 }
 
-async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveLegacyKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const base = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
@@ -68,11 +72,10 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
 
 export async function encryptVaultBackup(
   payload: VaultExportPayload,
-  passphrase: string,
+  userId: string,
 ): Promise<EncryptedVaultBackup> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await getUserContentKey(userId);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(passphrase, salt);
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
   const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
 
@@ -80,7 +83,8 @@ export async function encryptVaultBackup(
     version: BACKUP_VERSION,
     app: 'prevault',
     createdAt: new Date().toISOString(),
-    salt: b64(salt),
+    ownerId: userId,
+    salt: '',
     iv: b64(iv),
     ciphertext: b64(new Uint8Array(encrypted)),
   };
@@ -92,14 +96,47 @@ function isSupportedBackupApp(app: string): app is BackupAppId {
 
 export async function decryptVaultBackup(
   file: EncryptedVaultBackup,
+  userId: string,
+): Promise<VaultExportPayload> {
+  if (!isSupportedBackupApp(file.app)) {
+    throw new Error('Unsupported backup file format.');
+  }
+
+  if (file.version === 1) {
+    throw new Error(
+      'This backup uses an older passphrase format. Create a new backup while signed in with Google.',
+    );
+  }
+
+  if (file.version !== BACKUP_VERSION) {
+    throw new Error('Unsupported backup file format.');
+  }
+
+  if (file.ownerId && file.ownerId !== userId) {
+    throw new Error('This backup belongs to a different Google account. Sign in with the same account to restore.');
+  }
+
+  const iv = fromB64(file.iv);
+  const key = await getUserContentKey(userId);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    fromB64(file.ciphertext),
+  );
+  return JSON.parse(new TextDecoder().decode(decrypted)) as VaultExportPayload;
+}
+
+/** @deprecated Legacy v1 passphrase backups — no longer created in UI. */
+export async function decryptLegacyVaultBackup(
+  file: EncryptedVaultBackup,
   passphrase: string,
 ): Promise<VaultExportPayload> {
-  if (!isSupportedBackupApp(file.app) || file.version !== BACKUP_VERSION) {
-    throw new Error('Unsupported backup file format.');
+  if (file.version !== 1) {
+    throw new Error('Not a legacy passphrase backup.');
   }
   const salt = fromB64(file.salt);
   const iv = fromB64(file.iv);
-  const key = await deriveKey(passphrase, salt);
+  const key = await deriveLegacyKey(passphrase, salt);
   const decrypted = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
     key,

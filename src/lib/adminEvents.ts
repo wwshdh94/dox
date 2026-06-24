@@ -13,6 +13,7 @@ export type AdminEventType =
   | 'feedback_received'
   | 'feedback_replied'
   | 'feedback_status_changed'
+  | 'feedback_quality_approved'
   | 'user_blocked'
   | 'user_unblocked'
   | 'discount_granted'

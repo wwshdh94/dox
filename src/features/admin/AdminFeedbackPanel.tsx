@@ -3,10 +3,13 @@ import { Button } from '@/components/Button';
 import { formatDate } from '@/lib/format';
 import type { FeedbackItem, FeedbackStatus } from '@/lib/feedback';
 import {
+  adminApproveFeedbackQuality,
   adminReplyToFeedback,
+  adminRevokeFeedbackQuality,
   adminSetFeedbackStatus,
   listAdminFeedback,
 } from '@/features/admin/adminFeedbackOps';
+import { isQualityFeedbackMessage, MIN_QUALITY_FEEDBACK_CHARS } from '@/lib/feedback';
 
 const STATUS_OPTIONS: { value: FeedbackStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -52,6 +55,18 @@ export function AdminFeedbackPanel({ onComplete }: { onComplete: () => void }) {
     setReply('');
     refresh();
   };
+
+  const toggleQualityApproval = () => {
+    if (!selected) return;
+    if (selected.adminQualityApproved) {
+      adminRevokeFeedbackQuality(selected.id);
+    } else {
+      adminApproveFeedbackQuality(selected.id);
+    }
+    refresh();
+  };
+
+  const qualityEligible = selected ? isQualityFeedbackMessage(selected.message) : false;
 
   return (
     <section className="rounded-2xl border border-border bg-surface-elevated shadow-sm">
@@ -103,6 +118,9 @@ export function AdminFeedbackPanel({ onComplete }: { onComplete: () => void }) {
                   </div>
                   <p className="text-xs text-muted">{item.userEmail}</p>
                   <p className="mt-1 line-clamp-2 text-xs text-muted">{item.message}</p>
+                  {item.adminQualityApproved ? (
+                    <p className="mt-1 text-[0.65rem] font-medium text-success">Quality approved</p>
+                  ) : null}
                   <p className="mt-1 text-[0.65rem] text-muted">{formatDate(item.createdAt)}</p>
                 </button>
               </li>
@@ -121,9 +139,27 @@ export function AdminFeedbackPanel({ onComplete }: { onComplete: () => void }) {
                   {selected.userEmail} · {selected.category}
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-muted">{selected.message}</p>
+                {selected.adminQualityApproved ? (
+                  <p className="mt-2 text-xs font-medium text-success">
+                    Approved for Lifetime Pro task credit
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-1">
+                <Button
+                  variant={selected.adminQualityApproved ? 'primary' : 'secondary'}
+                  className="!min-h-8 px-2 py-1 text-[0.65rem]"
+                  onClick={toggleQualityApproval}
+                  disabled={!qualityEligible && !selected.adminQualityApproved}
+                  title={
+                    qualityEligible
+                      ? 'Counts toward user Lifetime Pro feedback task'
+                      : `Needs ${MIN_QUALITY_FEEDBACK_CHARS}+ characters`
+                  }
+                >
+                  {selected.adminQualityApproved ? 'Revoke quality' : 'Approve quality'}
+                </Button>
                 {(['in_progress', 'fixed', 'closed'] as FeedbackStatus[]).map((status) => (
                   <Button
                     key={status}

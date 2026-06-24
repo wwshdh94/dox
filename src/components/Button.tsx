@@ -1,7 +1,11 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { triggerHaptic, type HapticPattern } from '@/lib/haptics';
+import { useVaultStore } from '@/store/useVaultStore';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  /** Light haptic on tap when supported (Android PWA) */
+  haptic?: HapticPattern | false;
   children: ReactNode;
 }
 
@@ -17,12 +21,22 @@ const variants = {
 export function Button({
   variant = 'primary',
   className = '',
+  haptic = 'light',
   children,
+  onClick,
   ...props
 }: ButtonProps) {
+  const hapticEnabled = useVaultStore((s) => s.settings.hapticFeedback !== false);
+
   return (
     <button
       className={`min-h-11 rounded-2xl px-5 py-2.5 text-sm font-semibold tracking-tight transition-all duration-200 disabled:opacity-50 ${variants[variant]} ${className}`}
+      onClick={(e) => {
+        if (haptic !== false) {
+          triggerHaptic(haptic, { enabled: hapticEnabled });
+        }
+        onClick?.(e);
+      }}
       {...props}
     >
       {children}

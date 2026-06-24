@@ -16,8 +16,8 @@ import type {
 import { uid } from '@/lib/format';
 import { canDeleteDocument, canManageDocument, canManageDocumentFamilyAccess } from '@/lib/documentVisibility';
 import { isDocumentReviewed } from '@/lib/documentReview';
-import { canManageFamilyAccess } from '@/lib/family';
-import { appendAdminEvent } from '@/lib/adminEvents';
+import { canManageFamilyAccess, getOwnerMember } from '@/lib/family';
+import { clearGoogleDriveAccessTokenCache } from '@/lib/googleDrive';
 import { syncPlatformHouseholdFromVault } from '@/lib/adminPlatformRegistry';
 import { syncNoteMentions } from '@/lib/noteMentions';
 import { generateInviteToken } from '@/lib/invites';
@@ -34,6 +34,7 @@ import {
   canAddMember,
   canCreateBundle,
   canCreateTempLink,
+  canUseCloudAi,
   activityLogRetentionDays,
   tempLinkDurationHours,
 } from '@/lib/planLimits';
@@ -47,13 +48,60 @@ import {
   resolveDocumentMemberId,
 } from '@/lib/documentLimits';
 import { notifyMemberDocLimitReached, notifyMembersAtCap } from '@/lib/adminNotify';
-import { extractOnDevice } from '@/lib/ocr';
+import { extractDocumentFromPagesAuto } from '@/lib/ocr';
+import { resolveDocTypeAfterOcr } from '@/lib/ocrRecognition';
+import { shouldExtractFromUpload } from '@/lib/ocrRoute';
+import { isCloudOcrAllowed } from '@/lib/ocrCloud';
+import { isDocumentProcessingEnabled } from '@/lib/documentProcessing';
 import { normalizeDocFields, documentExpiryFromFields } from '@/lib/docFields';
+import {
+  sanitizeAssetLabel,
+  sanitizeBundleInput,
+  sanitizeDocFieldValues,
+  sanitizeDocumentNotes,
+  sanitizeDocumentTitle,
+  sanitizeMemberInput,
+  validateDocumentFilePayload,
+} from '@/lib/inputLimits';
 import type { VaultExportPayload } from '@/lib/vaultBackup';
 import {
   clearBiometricCredential,
   registerBiometricCredential,
 } from '@/lib/biometricLock';
+import {
+  hasEarnedLifetimePro,
+} from '@/lib/launchTasks';
+import { reserveLaunchCohortSlot } from '@/lib/launchCohort';
+import { defaultDevUserPlan, withDevUserPlan } from '@/lib/devDefaults';
+import { signOutSupabase } from '@/lib/supabase/auth';
+import {
+  deleteDocumentFromServer,
+  deleteShareGrantFromServer,
+  upsertDocumentToServer,
+  upsertShareGrantToServer,
+} from '@/lib/supabase/documents';
+import { syncHouseholdVaultFromServer } from '@/lib/supabase/vaultSync';
+
+function pushDocById(get: () => VaultState, id: string) {
+  const doc = get().documents.find((d) => d.id === id);
+  if (!doc) return;
+  void upsertDocumentToServer(doc).then((res) => {
+    if (!res.ok || !res.storagePath) return;
+    useVaultStore.setState((s) => ({
+      documents: s.documents.map((d) =>
+        d.id === id
+          ? {
+              ...d,
+              storagePath: res.storagePath,
+              createdBy: res.createdBy ?? d.createdBy,
+              fileDataUrl: undefined,
+              additionalFileDataUrls: undefined,
+            }
+          : d,
+      ),
+    }));
+  });
+}
 
 interface VaultState {
   user: User | null;
@@ -70,7 +118,13 @@ interface VaultState {
   locked: boolean;
 
   signInDemo: (opts?: { referredBy?: string }) => void;
-  signOut: () => void;
+  hydrateAuthUser: (user: User) => void;
+  signOut: () => Promise<void>;
+  signOutLocal: () => void;
+  /** Clear vault data locally; keeps signed-in user and welcome/consent flags. */
+  purgeVaultData: () => void;
+  /** Demo/local: hand owner role to a joined family member. */
+  transferOwnershipLocally: (successorMemberId: string) => void;
   setUserPlan: (plan: User['plan']) => void;
   acceptConsent: () => void;
   completeOnboarding: () => void;
@@ -86,6 +140,7 @@ interface VaultState {
   ensureMemberInviteToken: (memberId: string) => string;
   disableMember: (id: string) => void;
   enableMember: (id: string) => boolean;
+  deleteMember: (id: string) => boolean;
   markMemberJoined: (id: string) => void;
   touchMemberActivity: () => void;
 
@@ -104,8 +159,9 @@ interface VaultState {
     opts: {
       fileName: string;
       docType: Document['docType'];
-      extractMode: 'manual' | 'on_device' | 'cloud';
+      userPickedDocType?: boolean;
       fileDataUrl?: string;
+      additionalFileDataUrls?: string[];
     },
   ) => Promise<void>;
   markDocumentReviewed: (
@@ -157,16 +213,21 @@ interface VaultState {
   recordBackup: (provider: 'file' | 'google_drive', driveFileId?: string) => void;
   seedDemoData: () => void;
   syncPlatformMetrics: () => void;
+  syncLifetimeProFromTasks: () => void;
+  completeWelcome: () => void;
+  enterGuestExplore: () => void;
 }
 
 const defaultSettings: AppSettings = {
   theme: 'system',
   pushReminders: true,
-  emailReminders: true,
+  emailReminders: false,
   cloudAiEnabled: false,
   privacyMode: true,
+  documentProcessingEnabled: true,
   onboardingComplete: false,
   familyHomeView: 'me',
+  hapticFeedback: true,
 };
 
 function shareActor(state: Pick<VaultState, 'user' | 'members'>): { memberId?: string; name: string } {
@@ -194,34 +255,70 @@ export const useVaultStore = create<VaultState>()(
       locked: false,
 
       signInDemo: (opts) => {
+        const s = get();
+        if (s.settings.guestExplore || s.user?.isGuestPreview) {
+          set({
+            user: null,
+            members: [],
+            assets: [],
+            documents: [],
+            activities: [],
+            shareGrants: [],
+            tempLinks: [],
+            bundles: [],
+            bundleShareLinks: [],
+            visitingCard: null,
+            locked: false,
+          });
+        }
         const referredBy = opts?.referredBy ?? consumePendingReferral();
         const userId = uid();
         const adminOwnerEmail = import.meta.env.VITE_ADMIN_OWNER_EMAIL as string | undefined;
         const email = adminOwnerEmail?.trim() || 'demo@gmail.com';
-        set({
+        const cohort = reserveLaunchCohortSlot();
+        const plan = defaultDevUserPlan();
+        set((s) => ({
           user: {
             id: userId,
             email,
             name: 'Rahul Sharma',
             avatarUrl: undefined,
-            plan: 'free',
+            plan,
             referralCode: generateReferralCode(),
             referredBy,
             referralUploads: 0,
             referralQualified: false,
+            launchCohort: cohort.eligible,
+            launchCohortNumber: cohort.cohortNumber ?? undefined,
           },
-        });
+          settings: {
+            ...s.settings,
+            guestExplore: false,
+            welcomeSeen: true,
+          },
+        }));
         appendAdminEvent({
           type: 'signup',
           householdUserId: userId,
           householdEmail: email,
-          plan: 'free',
-          meta: { referredBy: referredBy ?? '' },
+          plan,
+          meta: {
+            referredBy: referredBy ?? '',
+            launchCohort: cohort.eligible,
+            launchCohortNumber: cohort.cohortNumber ?? '',
+          },
         });
         get().syncPlatformMetrics();
       },
 
-      signOut: () => {
+      signOut: async () => {
+        await signOutSupabase();
+        get().signOutLocal();
+      },
+
+      signOutLocal: () => {
+        const welcomeSeen = get().settings.welcomeSeen;
+        clearGoogleDriveAccessTokenCache();
         set({
           user: null,
           members: [],
@@ -233,9 +330,100 @@ export const useVaultStore = create<VaultState>()(
           bundles: [],
           bundleShareLinks: [],
           visitingCard: null,
-          settings: { ...defaultSettings },
+          settings: { ...defaultSettings, welcomeSeen, guestExplore: false },
           locked: false,
         });
+      },
+
+      purgeVaultData: () => {
+        const { settings } = get();
+        set({
+          members: [],
+          assets: [],
+          documents: [],
+          activities: [],
+          shareGrants: [],
+          tempLinks: [],
+          bundles: [],
+          bundleShareLinks: [],
+          visitingCard: null,
+          settings: {
+            ...defaultSettings,
+            welcomeSeen: settings.welcomeSeen,
+            consentedAt: settings.consentedAt,
+            guestExplore: false,
+          },
+          locked: false,
+        });
+      },
+
+      transferOwnershipLocally: (successorMemberId) => {
+        const { members, user } = get();
+        const successor = members.find((m) => m.id === successorMemberId);
+        if (!successor || successor.role === 'owner' || !successor.email) return;
+
+        set({
+          members: members.map((m) => {
+            if (m.id === successorMemberId) {
+              return { ...m, role: 'owner' as const };
+            }
+            if (user && m.email?.toLowerCase() === user.email.toLowerCase()) {
+              return { ...m, role: 'viewer' as const };
+            }
+            if (m.role === 'owner') {
+              return { ...m, role: 'viewer' as const };
+            }
+            return m;
+          }),
+        });
+      },
+
+      hydrateAuthUser: (user) => {
+        const devUser = withDevUserPlan(user);
+        const s = get();
+        const switchingAccount =
+          s.user &&
+          s.user.id !== user.id &&
+          !s.user.isGuestPreview;
+
+        if (s.settings.guestExplore || s.user?.isGuestPreview || switchingAccount) {
+          set({
+            user: null,
+            members: [],
+            assets: [],
+            documents: [],
+            activities: [],
+            shareGrants: [],
+            tempLinks: [],
+            bundles: [],
+            bundleShareLinks: [],
+            visitingCard: null,
+            locked: false,
+          });
+        }
+
+        set((state) => ({
+          user: devUser,
+          settings: {
+            ...state.settings,
+            guestExplore: false,
+            welcomeSeen: true,
+          },
+        }));
+        appendAdminEvent({
+          type: 'signup',
+          householdUserId: devUser.id,
+          householdEmail: devUser.email,
+          plan: devUser.plan,
+          meta: {
+            referredBy: devUser.referredBy ?? '',
+            launchCohort: devUser.launchCohort ?? false,
+            launchCohortNumber: devUser.launchCohortNumber ?? '',
+            provider: 'google',
+          },
+        });
+        get().syncPlatformMetrics();
+        void syncHouseholdVaultFromServer();
       },
 
       setUserPlan: (plan) => {
@@ -271,11 +459,10 @@ export const useVaultStore = create<VaultState>()(
       },
 
       finishOnboarding: () => {
-        const code = crypto.randomUUID().slice(0, 8).toUpperCase();
         const { members } = get();
         if (members.length > 0) {
           set((s) => ({
-            settings: { ...s.settings, recoveryCode: code, onboardingComplete: true },
+            settings: { ...s.settings, onboardingComplete: true },
           }));
           return;
         }
@@ -514,12 +701,14 @@ export const useVaultStore = create<VaultState>()(
           assets: newAssets,
           documents: newDocuments,
           activities: [...uploadedActivities, ...s.activities].slice(0, 500),
-          settings: { ...s.settings, recoveryCode: code, onboardingComplete: true },
+          settings: { ...s.settings, onboardingComplete: true },
         }));
       },
 
       setSettings: (partial) => {
-        set((s) => ({ settings: { ...s.settings, ...partial } }));
+        set((s) => ({
+          settings: { ...s.settings, ...partial, emailReminders: false },
+        }));
       },
 
       unlock: () => {
@@ -570,15 +759,14 @@ export const useVaultStore = create<VaultState>()(
 
         const id = uid();
         const now = new Date().toISOString();
+        const cleaned = sanitizeMemberInput(m);
         set((s) => ({
           members: [
             ...s.members,
             {
+              ...m,
+              ...cleaned,
               id,
-              displayName: m.displayName,
-              email: m.email,
-              phone: m.phone,
-              relationship: m.relationship,
               gender: m.gender,
               avatarUrl: m.avatarUrl,
               parentMemberId: m.parentMemberId,
@@ -595,8 +783,9 @@ export const useVaultStore = create<VaultState>()(
       },
 
       updateMember: (id, partial) => {
+        const cleaned = sanitizeMemberInput(partial);
         set((s) => ({
-          members: s.members.map((m) => (m.id === id ? { ...m, ...partial } : m)),
+          members: s.members.map((m) => (m.id === id ? { ...m, ...partial, ...cleaned } : m)),
         }));
       },
 
@@ -643,6 +832,36 @@ export const useVaultStore = create<VaultState>()(
         return true;
       },
 
+      deleteMember: (id) => {
+        const { members, user } = get();
+        const member = members.find((m) => m.id === id);
+        if (!member || member.role === 'owner' || member.joinedAt) return false;
+        if (!canManageFamilyAccess(members, user)) return false;
+
+        get().revokeAllForMember(id);
+        const owner = getOwnerMember(members);
+        const reassignTo = member.parentMemberId ?? owner?.id;
+
+        set((s) => ({
+          members: s.members
+            .filter((m) => m.id !== id)
+            .map((m) =>
+              m.parentMemberId === id ? { ...m, parentMemberId: reassignTo } : m,
+            ),
+          documents: reassignTo
+            ? s.documents.map((d) =>
+                d.memberId === id ? { ...d, memberId: reassignTo, updatedAt: new Date().toISOString() } : d,
+              )
+            : s.documents.filter((d) => d.memberId !== id),
+          assets: s.assets.map((a) =>
+            a.ownedByMemberId === id ? { ...a, ownedByMemberId: reassignTo } : a,
+          ),
+        }));
+        get().logActivity('member_removed', { memberId: id });
+        get().syncPlatformMetrics();
+        return true;
+      },
+
       markMemberJoined: (id) => {
         const now = new Date().toISOString();
         set((s) => ({
@@ -683,13 +902,19 @@ export const useVaultStore = create<VaultState>()(
         if (!canAddAsset(get().user, get().assets.length)) return '';
 
         const id = uid();
-        set((s) => ({ assets: [...s.assets, { ...a, id }] }));
+        set((s) => ({
+          assets: [...s.assets, { ...a, id, label: sanitizeAssetLabel(a.label) }],
+        }));
         return id;
       },
 
       updateAsset: (id, partial) => {
+        const label =
+          partial.label !== undefined ? sanitizeAssetLabel(partial.label) : undefined;
         set((s) => ({
-          assets: s.assets.map((a) => (a.id === id ? { ...a, ...partial } : a)),
+          assets: s.assets.map((a) =>
+            a.id === id ? { ...a, ...partial, ...(label !== undefined ? { label } : {}) } : a,
+          ),
         }));
       },
 
@@ -704,9 +929,12 @@ export const useVaultStore = create<VaultState>()(
           memberId: d.memberId,
           assetId: d.assetId,
           reviewStatus: status,
-          verificationStatus: status === 'under_review' || status === 'processing' ? 'pending' : 'verified',
+          verificationStatus: status === 'under_review' || status === 'processing' || status === 'pending_details' ? 'pending' : 'verified',
         });
         if (!gate.allowed) return '';
+
+        const payloadCheck = validateDocumentFilePayload(d.fileDataUrl, d.additionalFileDataUrls);
+        if (!payloadCheck.ok) return '';
 
         const id = uid();
         const now = new Date().toISOString();
@@ -714,13 +942,17 @@ export const useVaultStore = create<VaultState>()(
           memberId: d.memberId,
           assetId: d.assetId,
         });
+        const fields = sanitizeDocFieldValues(d.fields as Record<string, string | number>);
         set((s) => ({
           documents: [
             ...s.documents,
             {
               ...d,
+              title: sanitizeDocumentTitle(d.title),
+              notes: sanitizeDocumentNotes(d.notes),
+              fields,
               reviewStatus: status,
-              verificationStatus: status === 'reviewed' ? 'verified' : status === 'under_review' || status === 'processing' ? 'pending' : undefined,
+              verificationStatus: status === 'reviewed' ? 'verified' : status === 'under_review' || status === 'processing' || status === 'pending_details' ? 'pending' : undefined,
               domain: d.domain ?? tags.domain,
               category: d.category ?? tags.category,
               id,
@@ -731,7 +963,7 @@ export const useVaultStore = create<VaultState>()(
         }));
         get().logActivity(
           'uploaded',
-          { docType: d.docType, pending: status === 'processing' || status === 'under_review' },
+          { docType: d.docType, pending: status === 'processing' || status === 'under_review' || status === 'pending_details' },
           id,
         );
 
@@ -796,6 +1028,7 @@ export const useVaultStore = create<VaultState>()(
         }
 
         get().syncPlatformMetrics();
+        pushDocById(get, id);
         return id;
       },
 
@@ -807,39 +1040,23 @@ export const useVaultStore = create<VaultState>()(
         const doc = get().documents.find((d) => d.id === id);
         if (!doc || doc.reviewStatus !== 'processing') return;
 
-        try {
-          if (opts.extractMode === 'manual') {
-            set((s) => ({
-              documents: s.documents.map((d) =>
-                d.id === id
-                  ? { ...d, reviewStatus: 'under_review' as const, updatedAt: new Date().toISOString() }
-                  : d,
-              ),
-            }));
-            get().syncPlatformMetrics();
-            return;
-          }
+        const fileDataUrl = opts.fileDataUrl ?? doc.fileDataUrl;
+        const additionalFileDataUrls =
+          opts.additionalFileDataUrls ?? doc.additionalFileDataUrls;
 
-          const fileDataUrl = opts.fileDataUrl ?? doc.fileDataUrl;
-          const result = await extractOnDevice({
-            fileName: opts.fileName,
-            docType: opts.docType,
-            fileDataUrl,
-          });
-          const mapped = normalizeDocFields(opts.docType, result.fields);
-          const docTitle = mapped.productName
-            ? String(mapped.productName)
-            : opts.fileName.replace(/\.[^.]+$/, '');
-          const docExpiry = documentExpiryFromFields(opts.docType, mapped, result.expiryDate);
+        const userPickedDocType = opts.userPickedDocType ?? false;
 
+        const markUnderReview = (extras?: Partial<Document>) => {
+          const needsDocTypeSelection =
+            extras?.needsDocTypeSelection ??
+            (!userPickedDocType && (extras?.docType ?? opts.docType) === 'other');
           set((s) => ({
             documents: s.documents.map((d) =>
               d.id === id
                 ? {
                     ...d,
-                    title: docTitle || d.title,
-                    fields: mapped,
-                    expiryDate: docExpiry ?? d.expiryDate,
+                    ...extras,
+                    needsDocTypeSelection,
                     reviewStatus: 'under_review' as const,
                     updatedAt: new Date().toISOString(),
                   }
@@ -847,21 +1064,74 @@ export const useVaultStore = create<VaultState>()(
             ),
           }));
           get().syncPlatformMetrics();
-        } catch {
+          pushDocById(get, id);
+        };
+
+        try {
+          const { settings, user } = get();
+          if (!isDocumentProcessingEnabled(settings)) {
+            markUnderReview();
+            return;
+          }
+
+          if (!shouldExtractFromUpload({ fileDataUrl, additionalFileDataUrls })) {
+            markUnderReview();
+            return;
+          }
+
+          const cloudAllowed = isCloudOcrAllowed(settings, canUseCloudAi(user));
+
+          const result = await extractDocumentFromPagesAuto({
+            fileName: opts.fileName,
+            docType: opts.docType,
+            fileDataUrl,
+            additionalFileDataUrls,
+            cloudAllowed,
+          });
+          const resolved = resolveDocTypeAfterOcr(opts.docType, userPickedDocType, result);
+          const mappedFields = normalizeDocFields(resolved.docType, resolved.fields);
+          const docTitle = mappedFields.productName
+            ? mappedFields.productName
+            : opts.fileName.replace(/\.[^.]+$/, '');
+          const docExpiry = documentExpiryFromFields(
+            resolved.docType,
+            mappedFields,
+            result.expiryDate,
+          );
+          const tags = inferDocTags(resolved.docType, {
+            memberId: doc.memberId,
+            assetId: doc.assetId,
+          });
+
           set((s) => ({
             documents: s.documents.map((d) =>
               d.id === id
-                ? { ...d, reviewStatus: 'under_review' as const, updatedAt: new Date().toISOString() }
+                ? {
+                    ...d,
+                    title: docTitle || d.title,
+                    docType: resolved.docType,
+                    domain: tags.domain,
+                    category: tags.category,
+                    fields: mappedFields,
+                    expiryDate: docExpiry ?? d.expiryDate,
+                    needsDocTypeSelection: resolved.needsDocTypeSelection,
+                    reviewStatus: 'under_review' as const,
+                    updatedAt: new Date().toISOString(),
+                  }
                 : d,
             ),
           }));
           get().syncPlatformMetrics();
+          pushDocById(get, id);
+        } catch {
+          markUnderReview();
         }
       },
 
       markDocumentReviewed: (id, partial) => {
         const doc = get().documents.find((d) => d.id === id);
         if (!doc || isDocumentReviewed(doc)) return false;
+        if (doc.needsDocTypeSelection) return false;
         if (!canManageDocument(doc, get().members, get().user, get().documents)) return false;
 
         const user = get().user;
@@ -876,6 +1146,7 @@ export const useVaultStore = create<VaultState>()(
                   ...partial,
                   reviewStatus: 'reviewed' as const,
                   verificationStatus: 'verified' as const,
+                  needsDocTypeSelection: false,
                   updatedAt: new Date().toISOString(),
                 }
               : d,
@@ -911,6 +1182,7 @@ export const useVaultStore = create<VaultState>()(
         }
 
         get().syncPlatformMetrics();
+        pushDocById(get, id);
         return true;
       },
 
@@ -931,27 +1203,45 @@ export const useVaultStore = create<VaultState>()(
         }));
         get().logActivity('rejected', {}, id);
         get().syncPlatformMetrics();
+        pushDocById(get, id);
       },
 
       updateDocument: (id, partial) => {
         const doc = get().documents.find((d) => d.id === id);
         if (!doc || !canManageDocument(doc, get().members, get().user, get().documents)) return;
-        const nextNotes = partial.notes !== undefined ? partial.notes : doc.notes;
+
+        const nextFileDataUrl = partial.fileDataUrl ?? doc.fileDataUrl;
+        const nextAdditional =
+          partial.additionalFileDataUrls ?? doc.additionalFileDataUrls;
+        const payloadCheck = validateDocumentFilePayload(nextFileDataUrl, nextAdditional);
+        if (!payloadCheck.ok) return;
+
+        const patch = { ...partial };
+        if (partial.title !== undefined) patch.title = sanitizeDocumentTitle(partial.title);
+        if (partial.notes !== undefined) patch.notes = sanitizeDocumentNotes(partial.notes);
+        if (partial.fields !== undefined) {
+          patch.fields = sanitizeDocFieldValues(
+            partial.fields as Record<string, string | number>,
+          );
+        }
+
+        const nextNotes = patch.notes !== undefined ? patch.notes : doc.notes;
         set((s) => ({
           documents: s.documents.map((d) =>
-            d.id === id ? { ...d, ...partial, updatedAt: new Date().toISOString() } : d,
+            d.id === id ? { ...d, ...patch, updatedAt: new Date().toISOString() } : d,
           ),
         }));
         if (nextNotes?.trim()) {
           syncNoteMentions({
             documentId: id,
-            documentTitle: partial.title ?? doc.title,
+            documentTitle: patch.title ?? doc.title,
             notes: nextNotes,
             members: get().members,
             authorName: get().user?.name ?? 'Household',
           });
         }
         get().syncPlatformMetrics();
+        pushDocById(get, id);
       },
 
       deleteDocument: (id) => {
@@ -969,6 +1259,7 @@ export const useVaultStore = create<VaultState>()(
           })),
         }));
         get().syncPlatformMetrics();
+        void deleteDocumentFromServer(id, doc.storagePath);
       },
 
       markRenewed: (id) => {
@@ -982,6 +1273,7 @@ export const useVaultStore = create<VaultState>()(
         }));
         get().logActivity('renewed', {}, id);
         get().syncPlatformMetrics();
+        pushDocById(get, id);
       },
 
       archiveDocument: (id) => {
@@ -995,6 +1287,7 @@ export const useVaultStore = create<VaultState>()(
         }));
         get().logActivity('archived', {}, id);
         get().syncPlatformMetrics();
+        pushDocById(get, id);
       },
 
       unarchiveDocument: (id) => {
@@ -1006,6 +1299,7 @@ export const useVaultStore = create<VaultState>()(
         }));
         get().logActivity('unarchived', {}, id);
         get().syncPlatformMetrics();
+        pushDocById(get, id);
       },
 
       logActivity: (event, metadata = {}, documentId, bundleId) => {
@@ -1043,10 +1337,13 @@ export const useVaultStore = create<VaultState>()(
       addShareGrant: (documentId, memberId) => {
         const doc = get().documents.find((d) => d.id === documentId);
         if (!doc || !canManageDocumentFamilyAccess(doc, get().members, get().user, get().documents)) return;
+        const grant = { id: uid(), documentId, memberId };
         set((s) => ({
-          shareGrants: [...s.shareGrants, { id: uid(), documentId, memberId }],
+          shareGrants: [...s.shareGrants, grant],
         }));
         get().logActivity('shared', { memberId }, documentId);
+        const member = get().members.find((m) => m.id === memberId);
+        void upsertShareGrantToServer(grant, member?.email);
       },
 
       revokeShare: (documentId, memberId) => {
@@ -1058,6 +1355,7 @@ export const useVaultStore = create<VaultState>()(
           ),
         }));
         get().logActivity('revoked', { memberId }, documentId);
+        void deleteShareGrantFromServer(documentId, memberId);
       },
 
       revokeAllForMember: (memberId) => {
@@ -1138,6 +1436,7 @@ export const useVaultStore = create<VaultState>()(
       createBundle: (b) => {
         if (!canCreateBundle(get().user, get().bundles.length)) return '';
 
+        const cleaned = sanitizeBundleInput(b);
         const id = uid();
         const now = new Date().toISOString();
         set((s) => ({
@@ -1145,23 +1444,39 @@ export const useVaultStore = create<VaultState>()(
             ...s.bundles,
             {
               ...b,
+              name: cleaned.name ?? b.name,
+              purpose: cleaned.purpose ?? b.purpose,
+              documentIds: cleaned.documentIds ?? b.documentIds,
               id,
               createdAt: now,
               updatedAt: now,
             },
           ],
         }));
-        get().logActivity('bundle_created', { name: b.name, docCount: b.documentIds.length }, undefined, id);
+        get().logActivity(
+          'bundle_created',
+          { name: cleaned.name ?? b.name, docCount: (cleaned.documentIds ?? b.documentIds).length },
+          undefined,
+          id,
+        );
         return id;
       },
 
       updateBundle: (id, partial) => {
+        const cleaned = sanitizeBundleInput(partial);
         set((s) => ({
           bundles: s.bundles.map((b) =>
-            b.id === id ? { ...b, ...partial, updatedAt: new Date().toISOString() } : b,
+            b.id === id
+              ? {
+                  ...b,
+                  ...partial,
+                  ...cleaned,
+                  updatedAt: new Date().toISOString(),
+                }
+              : b,
           ),
         }));
-        get().logActivity('bundle_updated', { name: partial.name ?? '' }, undefined, id);
+        get().logActivity('bundle_updated', { name: cleaned.name ?? partial.name ?? '' }, undefined, id);
       },
 
       deleteBundle: (id) => {
@@ -1336,6 +1651,21 @@ export const useVaultStore = create<VaultState>()(
           });
         }
 
+        get().addMember({
+          displayName: 'Ananya Sharma',
+          relationship: 'Daughter',
+          gender: 'female',
+          parentMemberId: selfId,
+          dateOfBirth: '2018-05-10',
+        });
+        get().addMember({
+          displayName: 'Arjun Sharma',
+          relationship: 'Son',
+          gender: 'male',
+          parentMemberId: selfId,
+          dateOfBirth: '2015-09-22',
+        });
+
         const vehicleId = get().addAsset({
           type: 'vehicle',
           label: 'Swift — MH01AB1234',
@@ -1418,13 +1748,66 @@ export const useVaultStore = create<VaultState>()(
           tempLinks: s.tempLinks,
         });
       },
+
+      syncLifetimeProFromTasks: () => {
+        const s = get();
+        if (!s.user || s.user.lifetimePro || !s.user.launchCohort) return;
+        const earned = hasEarnedLifetimePro({
+          user: s.user,
+          documents: s.documents,
+          members: s.members,
+          settings: s.settings,
+        });
+        if (!earned) return;
+        set({
+          user: {
+            ...s.user,
+            lifetimePro: true,
+            lifetimeProGrantedAt: new Date().toISOString(),
+            plan: 'pro',
+          },
+        });
+      },
+
+      completeWelcome: () => {
+        set((s) => ({
+          settings: { ...s.settings, welcomeSeen: true },
+        }));
+      },
+
+      enterGuestExplore: () => {
+        const guestId = 'guest-preview';
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            welcomeSeen: true,
+            guestExplore: true,
+            onboardingComplete: true,
+          },
+          user: {
+            id: guestId,
+            email: '',
+            name: 'Guest',
+            plan: defaultDevUserPlan(),
+            referralCode: 'GUEST0000',
+            referralUploads: 0,
+            referralQualified: false,
+            isGuestPreview: true,
+          },
+          locked: false,
+        }));
+        get().seedDemoData();
+      },
     }),
     {
       name: 'prevault-vault',
-      version: 6,
+      version: 9,
       partialize: (state) => {
         const { familyHomeView: _familyHomeView, ...persistedSettings } = state.settings;
-        return { ...state, settings: persistedSettings };
+        const documents = state.documents.map((d) =>
+          d.storagePath ? { ...d, fileDataUrl: undefined, additionalFileDataUrls: undefined } : d,
+        );
+        return { ...state, documents, settings: persistedSettings };
       },
       onRehydrateStorage: () => (state) => {
         queueMicrotask(() => {
@@ -1436,6 +1819,7 @@ export const useVaultStore = create<VaultState>()(
           }
           useVaultStore.getState().purgeExpiredShareLinks();
           useVaultStore.getState().pruneActivityLogs();
+          useVaultStore.getState().syncLifetimeProFromTasks();
         });
       },
       migrate: (persisted, version) => {
@@ -1517,6 +1901,21 @@ export const useVaultStore = create<VaultState>()(
                   : 'reviewed';
             return { ...doc, reviewStatus };
           });
+        }
+        if (version < 7 && state.documents) {
+          state.documents = state.documents.map((d) => {
+            const doc = d as Document;
+            return doc.storagePath
+              ? { ...doc, fileDataUrl: undefined, additionalFileDataUrls: undefined }
+              : doc;
+          });
+        }
+        if (version < 8 && state.settings) {
+          const settings = state.settings as AppSettings & { recoveryCode?: string };
+          delete settings.recoveryCode;
+        }
+        if (version < 9 && state.user && import.meta.env.DEV) {
+          state.user = withDevUserPlan(state.user);
         }
         return state;
       },

@@ -11,6 +11,11 @@ import { Modal } from '@/components/Modal';
 import { useVaultStore } from '@/store/useVaultStore';
 import { expiryStatus, formatDate, isValidEmail } from '@/lib/format';
 import { documentBackPath } from '@/lib/navigation';
+import {
+  MAX_DOCUMENT_TITLE_CHARS,
+  sanitizeDocumentNotes,
+  sanitizeDocumentTitle,
+} from '@/lib/inputLimits';
 import { countActiveTempLinks } from '@/lib/activityLog';
 import {
   canCreateTempLink,
@@ -21,9 +26,10 @@ import { suggestedCategoryForDocType, suggestedDomainForDocType, resolveDocTags 
 import { memberSelectLabel } from '@/lib/family';
 import type { DocType } from '@/types';
 import { canDeleteDocument, canManageDocument, canManageDocumentFamilyAccess, canViewDocument, isMinorManagedDocument } from '@/lib/documentVisibility';
-import { isDocumentReviewed, isDocumentRejected, isDocumentUnderReview } from '@/lib/documentReview';
+import { isDocumentReviewed, isDocumentRejected, isDocumentUnderReview, isDocumentPendingDetails } from '@/lib/documentReview';
 import { DocumentReviewStatus } from '@/components/DocumentReviewStatus';
 import { UpgradeHint } from '@/components/UpgradeHint';
+import { useDocumentFileUrl } from '@/hooks/useDocumentFileUrl';
 
 function ShareWhatsAppIcon() {
   return (
@@ -124,6 +130,8 @@ function shareDurationToOpts(duration: ShareDuration): { hours?: number; permane
   }
 }
 
+const REVIEW_DOC_TYPE_BLANK = { value: '', label: 'Choose document type…' };
+
 const HEALTH_REVIEW_DOC_TYPES: { value: DocType; label: string }[] = [
   { value: 'health_insurance', label: 'Health insurance' },
   { value: 'lab_report', label: 'Lab report' },
@@ -156,6 +164,9 @@ export function DocumentDetailPage() {
   const shareGrants = useVaultStore((s) => s.shareGrants);
   const user = useVaultStore((s) => s.user);
   const doc = useMemo(() => allDocuments.find((d) => d.id === id), [allDocuments, id]);
+  const { fileDataUrl, additionalFileDataUrls, loading: fileLoading, error: fileError } =
+    useDocumentFileUrl(doc);
+  const [reviewTitle, setReviewTitle] = useState(doc?.title ?? '');
   const members = useVaultStore((s) => s.members);
   const updateDocument = useVaultStore((s) => s.updateDocument);
   const deleteDocument = useVaultStore((s) => s.deleteDocument);
@@ -200,8 +211,9 @@ export function DocumentDetailPage() {
       const saved = doc.notes ?? '';
       setNotes(saved);
       setNotesOpen(Boolean(saved.trim()));
+      setReviewTitle(doc.title);
     }
-  }, [doc?.id]);
+  }, [doc?.id, doc?.title]);
 
   if (!doc) {
     return (
@@ -232,13 +244,18 @@ export function DocumentDetailPage() {
   const canManage = canManageDocument(doc, members, user, allDocuments);
   const canShare = canManage && canCreateTempLink(user, activeTempCount) && isDocumentReviewed(doc);
   const needsReview = isDocumentUnderReview(doc);
+  const needsDetails = isDocumentPendingDetails(doc);
   const isRejected = isDocumentRejected(doc);
   const reviewStatus = doc.reviewStatus ?? (doc.verificationStatus === 'pending' ? 'under_review' : 'reviewed');
   const tags = resolveDocTags(doc);
   const reviewDocTypes = tags.domain === 'health' ? HEALTH_REVIEW_DOC_TYPES : FAMILY_REVIEW_DOC_TYPES;
-  const showReviewMeta = reviewStatus === 'processing' || needsReview || isRejected;
+  const reviewDocTypeOptions = doc.needsDocTypeSelection
+    ? [REVIEW_DOC_TYPE_BLANK, ...reviewDocTypes]
+    : reviewDocTypes;
+  const showReviewMeta = reviewStatus === 'processing' || needsReview || needsDetails || isRejected;
 
-  const handleReviewDocTypeChange = (next: DocType) => {
+  const handleReviewDocTypeChange = (next: DocType | '') => {
+    if (!next) return;
     updateDocument(doc.id, {
       docType: next,
       fields: normalizeDocFields(next, doc.fields),
@@ -248,6 +265,7 @@ export function DocumentDetailPage() {
         assetId: doc.assetId,
         uploadContext: tags.domain === 'health' ? 'health' : undefined,
       }),
+      needsDocTypeSelection: false,
     });
   };
 
@@ -261,7 +279,7 @@ export function DocumentDetailPage() {
   const familyAccessEnabled = Boolean(viewer && shareGrants.some((g) => g.documentId === doc.id && g.memberId === viewer.id));
 
   const saveNotes = () => {
-    const trimmed = notes.trim();
+    const trimmed = sanitizeDocumentNotes(notes) ?? '';
     if (trimmed !== (doc.notes ?? '')) {
       updateDocument(doc.id, { notes: trimmed || undefined });
     }
@@ -375,24 +393,47 @@ export function DocumentDetailPage() {
     <div className="flex min-h-dvh flex-col pb-28">
       <Header title={doc.title} backFallback={backTo} />
       <main className="page-main w-full flex min-h-0 flex-1 flex-col space-y-4 animate-fade-up">
-        <DocumentFilePreview fileName={doc.fileName} fileDataUrl={doc.fileDataUrl} />
+        <DocumentFilePreview
+          fileName={doc.fileName}
+          fileDataUrl={fileDataUrl}
+          additionalFileDataUrls={additionalFileDataUrls}
+          loading={fileLoading}
+          error={fileError}
+        />
 
         <div className="flex flex-wrap items-center gap-5">
-          <DocumentReviewStatus document={doc} />
+          <DocumentReviewStatus document={doc} detailed />
           <DocTagChips doc={doc} />
         </div>
 
         {showReviewMeta && canManage && (
           <section className="surface-panel space-y-3 p-4">
             <p className="section-label">Document details</p>
+            {doc.needsDocTypeSelection && (
+              <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
+                We could not recognize this document. Choose a document type below before marking reviewed.
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="Title"
+                value={reviewTitle}
+                onChange={(e) => setReviewTitle(e.target.value.slice(0, MAX_DOCUMENT_TITLE_CHARS))}
+                maxLength={MAX_DOCUMENT_TITLE_CHARS}
+                onBlur={() => {
+                  const next = sanitizeDocumentTitle(reviewTitle);
+                  if (next !== doc.title) {
+                    updateDocument(doc.id, { title: next });
+                  }
+                }}
+              />
               <Select
                 label="Document type"
-                value={doc.docType}
-                onChange={(e) => handleReviewDocTypeChange(e.target.value as DocType)}
+                value={doc.needsDocTypeSelection ? '' : doc.docType}
+                onChange={(e) => handleReviewDocTypeChange(e.target.value as DocType | '')}
               >
-                {reviewDocTypes.map((t) => (
-                  <option key={t.value} value={t.value}>
+                {reviewDocTypeOptions.map((t) => (
+                  <option key={t.value || 'blank'} value={t.value}>
                     {t.label}
                   </option>
                 ))}
@@ -412,9 +453,20 @@ export function DocumentDetailPage() {
               )}
             </div>
             <p className="text-xs text-muted">
-              Pre-filled from where you uploaded. Adjust before marking reviewed.
+              {needsDetails
+                ? 'Choose type and member, then enter field values on the next screen.'
+                : 'Pre-filled from where you uploaded. Adjust before marking reviewed.'}
             </p>
           </section>
+        )}
+
+        {needsDetails && !canManage && (
+          <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-4 text-sm">
+            <p className="font-medium text-accent-ink">Add details</p>
+            <p className="mt-1 text-xs text-muted">
+              The document owner must enter field details before this document is added to the vault.
+            </p>
+          </div>
         )}
 
         {needsReview && !canManage && (
@@ -432,6 +484,18 @@ export function DocumentDetailPage() {
             <p className="mt-1 text-xs text-muted">This document was not added to the vault.</p>
           </div>
         )}
+        {needsDetails && canManage && (
+          <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-4 text-sm">
+            <p className="font-medium text-accent-ink">Add details</p>
+            <p className="mt-1 text-xs text-muted">
+              Your file is saved. Enter document fields to finish adding it to your vault.
+            </p>
+            <Button className="mt-3 w-full" onClick={() => navigate(`/upload?edit=${doc.id}`)}>
+              Enter details
+            </Button>
+          </div>
+        )}
+
         {needsReview && canManage && (
           <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
             <p className="font-medium text-warning">Under review</p>
@@ -441,9 +505,16 @@ export function DocumentDetailPage() {
             <div className="mt-3 flex gap-2">
               <Button
                 className="flex-1"
+                disabled={doc.needsDocTypeSelection}
                 onClick={() => {
                   const ok = markDocumentReviewed(doc.id);
-                  if (!ok) setShareError('Could not mark as reviewed. Check your plan limits.');
+                  if (!ok) {
+                    setShareError(
+                      doc.needsDocTypeSelection
+                        ? 'Choose a document type before marking reviewed.'
+                        : 'Could not mark as reviewed. Check your plan limits.',
+                    );
+                  }
                 }}
               >
                 Mark reviewed

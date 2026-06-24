@@ -2,9 +2,13 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
+import { WelcomeFlowPage } from '@/features/welcome/WelcomeFlowPage';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { AuthCallbackPage } from '@/features/auth/AuthCallbackPage';
 import { OnboardingPage } from '@/features/auth/OnboardingPage';
 import { ProfilePage } from '@/features/auth/ProfilePage';
+import { AccountPage } from '@/features/auth/AccountPage';
+import { JoinHouseholdPage } from '@/features/household/JoinHouseholdPage';
 import { FamilyPage, ExpiringPage } from '@/features/family/FamilyPage';
 import { MemberDetailPage } from '@/features/family/MemberDetailPage';
 import { FamilyManagementPage } from '@/features/family/FamilyManagementPage';
@@ -27,7 +31,11 @@ import { BundleSharePage } from '@/features/bundles/BundleSharePage';
 import { BackupPage } from '@/features/backup/BackupPage';
 import { ReferralsPage } from '@/features/referrals/ReferralsPage';
 import { PlanPage } from '@/features/plan/PlanPage';
+import { LaunchTasksPage } from '@/features/plan/LaunchTasksPage';
 import { FeedbackPage } from '@/features/feedback/FeedbackPage';
+import { ContactPage } from '@/features/feedback/ContactPage';
+import { TermsPage } from '@/features/legal/TermsPage';
+import { PrivacyPage } from '@/features/legal/PrivacyPage';
 import { MentionsPage } from '@/features/mentions/MentionsPage';
 import { BlockedAccountPage } from '@/features/auth/BlockedAccountPage';
 import { LoadingScreen } from '@/components/LoadingScreen';
@@ -67,7 +75,12 @@ export default function App() {
       <ScrollToTop />
       <Routes>
         <Route element={<AppLayout />}>
+          <Route path="/welcome" element={<WelcomeFlowPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/join" element={<JoinHouseholdPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/" element={<FamilyPage />} />
           <Route path="/expiring" element={<ExpiringPage />} />
@@ -83,12 +96,15 @@ export default function App() {
           <Route path="/profile/appearance" element={<AppearanceSettingsPage />} />
           <Route path="/profile/settings" element={<SettingsPage />} />
           <Route path="/profile/security" element={<SecurityPage />} />
+          <Route path="/profile/account" element={<AccountPage />} />
           <Route path="/profile/activity" element={<ActivityLogPage />} />
           <Route path="/profile/archived" element={<ArchivedDocumentsPage />} />
           <Route path="/profile/backup" element={<BackupPage />} />
           <Route path="/profile/referrals" element={<ReferralsPage />} />
           <Route path="/profile/plan" element={<PlanPage />} />
+          <Route path="/profile/earn-pro" element={<LaunchTasksPage />} />
           <Route path="/profile/feedback" element={<FeedbackPage />} />
+          <Route path="/profile/contact" element={<ContactPage />} />
           <Route path="/profile/mentions" element={<MentionsPage />} />
           <Route path="/blocked" element={<BlockedAccountPage />} />
           <Route path="/profile/visiting-card" element={<VisitingCardPage />} />
